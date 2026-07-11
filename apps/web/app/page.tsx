@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Truck, ShieldCheck, Gem, MapPin } from "lucide-react";
+import { Truck, ShieldCheck, Gem, MapPin, Instagram } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { ShopHeader } from "@/components/shop/header";
 import { ShopFooter } from "@/components/shop/footer";
@@ -51,7 +51,6 @@ export default async function Home() {
       {/* Hero editorial */}
       <section className="grid items-stretch md:grid-cols-2">
         <div className="order-2 flex flex-col items-center justify-center bg-cream px-6 py-14 text-center md:order-1 md:py-24">
-          <p className="text-[11px] uppercase tracking-[0.35em] text-gold">Los Mochis · Sinaloa</p>
           <h1 className="mt-5 max-w-md font-serif text-4xl leading-tight text-ink sm:text-5xl md:text-6xl">
             Define tu estilo
           </h1>
@@ -74,7 +73,7 @@ export default async function Home() {
           {[
             { i: Truck, t: "Envíos a todo México", d: "Gratis en compras seleccionadas" },
             { i: ShieldCheck, t: "Garantía Turkana", d: "Autenticidad en cada pieza" },
-            { i: Gem, t: "Lujo accesible", d: "Tarjeta, OXXO y pagos seguros" },
+            { i: Gem, t: "Pagos flexibles", d: "Tarjeta, OXXO y pagos seguros" },
           ].map((b) => (
             <div key={b.t} className="flex flex-col items-center transition-transform duration-300 hover:-translate-y-1">
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gold/15 text-gold"><b.i className="h-5 w-5" strokeWidth={1.5} /></span>
@@ -121,6 +120,9 @@ export default async function Home() {
             <Reveal key={n} delay={idx * 80}>
               <a href={INSTAGRAM} target="_blank" rel="noopener noreferrer" className="group relative block aspect-[4/5] overflow-hidden rounded-2xl bg-sand ring-0 ring-gold/40 transition-all duration-300 hover:ring-2">
                 <Image src={`/instagram${n}.jpg`} alt="Turkana Jewelry en Instagram" fill sizes="(max-width: 640px) 50vw, 25vw" className="object-cover transition-transform duration-700 group-hover:scale-110" />
+                <span className="absolute inset-0 flex items-center justify-center bg-ink/40 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                  <Instagram className="h-8 w-8 text-white" strokeWidth={1.5} />
+                </span>
               </a>
             </Reveal>
           ))}

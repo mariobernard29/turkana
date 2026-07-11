@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -34,7 +33,7 @@ export function Sidebar() {
   return (
     <aside className="hidden w-60 shrink-0 flex-col bg-ink px-4 py-8 text-cream md:flex">
       <div className="mb-10 px-3">
-        <Image src="/turkana-wordmark.png" alt="Turkana" width={140} height={24} className="h-6 w-auto" />
+        <p className="font-serif text-2xl leading-none text-white">Turkana</p>
         <p className="mt-1 text-[10px] uppercase tracking-[0.3em] text-gold">Admin</p>
       </div>
       <nav className="flex flex-col gap-1">
