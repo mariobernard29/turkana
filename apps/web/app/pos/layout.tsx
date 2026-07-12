@@ -17,7 +17,7 @@ export default async function PosLayout({
     <div className="flex h-screen flex-col bg-[#e6e2da]">
       <header className="flex items-center justify-between bg-ink px-5 py-3 text-cream">
         <div className="flex flex-col leading-none">
-          <span className="font-serif text-xl text-white">Turkana</span>
+          <span className="font-serif text-xl tracking-wide text-white">TURKANA</span>
           <span className="mt-0.5 text-[10px] uppercase tracking-[0.3em] text-gold">POS</span>
         </div>
         <div className="flex items-center gap-4">

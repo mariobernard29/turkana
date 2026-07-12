@@ -33,7 +33,7 @@ export function Sidebar() {
   return (
     <aside className="hidden w-60 shrink-0 flex-col bg-ink px-4 py-8 text-cream md:flex">
       <div className="mb-10 px-3">
-        <p className="font-serif text-2xl leading-none text-white">Turkana</p>
+        <p className="font-serif text-2xl leading-none tracking-wide text-white">TURKANA</p>
         <p className="mt-1 text-[10px] uppercase tracking-[0.3em] text-gold">Admin</p>
       </div>
       <nav className="flex flex-col gap-1">

@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Loader2, Check } from "lucide-react";
 import { loginRewards, registerRewards } from "./actions";
+import { requestPasswordReset } from "@/app/auth/actions";
 import { cn } from "@/lib/utils";
 
 export default function RewardsAccessPage() {
@@ -14,6 +15,8 @@ export default function RewardsAccessPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmSent, setConfirmSent] = useState(false);
+  const [forgot, setForgot] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,7 +43,48 @@ export default function RewardsAccessPage() {
     }
   };
 
+  const submitReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    const res = await requestPasswordReset(email);
+    setBusy(false);
+    if (!res.ok) { setError(res.error ?? "No se pudo enviar el correo"); return; }
+    setResetSent(true);
+  };
+
   const field = "w-full rounded-lg border border-ink/15 bg-white px-4 py-3 text-sm outline-none focus:border-gold";
+
+  if (resetSent) {
+    return (
+      <Shell>
+        <div className="text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-50 text-green-600"><Check className="h-7 w-7" /></div>
+          <h1 className="text-2xl text-ink">Revisa tu correo</h1>
+          <p className="mt-3 text-sm text-muted">Si <strong>{email}</strong> tiene una cuenta, te enviamos un enlace para restablecer tu contraseña.</p>
+          <button onClick={() => { setResetSent(false); setForgot(false); }} className="mt-6 text-sm text-gold hover:text-gold-dark">Volver al inicio de sesión</button>
+        </div>
+      </Shell>
+    );
+  }
+
+  if (forgot) {
+    return (
+      <Shell>
+        <h1 className="mb-1 text-center text-2xl text-ink">Recuperar contraseña</h1>
+        <p className="mb-6 text-center text-sm text-muted">Ingresa tu correo y te enviaremos un enlace para restablecerla.</p>
+        <form onSubmit={submitReset} className="space-y-3">
+          <input className={field} type="email" placeholder="Correo" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          {error && <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</p>}
+          <button type="submit" disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-full bg-ink py-3.5 text-sm uppercase tracking-widest text-cream transition-colors hover:bg-gold-dark disabled:opacity-50">
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+            Enviar enlace
+          </button>
+          <button type="button" onClick={() => { setForgot(false); setError(null); }} className="block w-full text-center text-sm text-muted hover:text-ink">Volver al inicio de sesión</button>
+        </form>
+      </Shell>
+    );
+  }
 
   if (confirmSent) {
     return (
@@ -81,6 +125,12 @@ export default function RewardsAccessPage() {
           {busy && <Loader2 className="h-4 w-4 animate-spin" />}
           {tab === "login" ? "Entrar" : "Crear mi cuenta"}
         </button>
+
+        {tab === "login" && (
+          <button type="button" onClick={() => { setForgot(true); setError(null); }} className="block w-full text-center text-sm text-muted transition-colors hover:text-gold">
+            ¿Olvidaste tu contraseña?
+          </button>
+        )}
 
         {tab === "register" && (
           <p className="text-center text-[11px] leading-relaxed text-muted">

@@ -39,11 +39,11 @@ export async function startCheckout(
   // ── Variantes (precio y nombre desde la BD, nunca del cliente) ─────────────
   const { data: vData } = await db
     .from("product_variants")
-    .select("id, sku, price_cents, is_active, attributes, products(name, slug)")
+    .select("id, sku, price_cents, is_active, attributes, products(name, slug, track_inventory)")
     .in("id", ids);
   const variants = (vData as unknown as {
     id: string; sku: string; price_cents: number; is_active: boolean; attributes: Record<string, string> | null;
-    products: { name: string; slug: string } | { name: string; slug: string }[] | null;
+    products: { name: string; slug: string; track_inventory: boolean } | { name: string; slug: string; track_inventory: boolean }[] | null;
   }[]) ?? [];
   const vmap = new Map(variants.map((v) => [v.id, v]));
 
@@ -69,10 +69,13 @@ export async function startCheckout(
   for (const item of input.items) {
     const v = vmap.get(item.variantId);
     if (!v || !v.is_active) return { ok: false, error: "Un producto ya no está disponible" };
-    const avail = smap.get(item.variantId) ?? 0;
-    if (avail < item.qty) return { ok: false, error: `Sin stock suficiente para ${v.sku}` };
-
     const prod = Array.isArray(v.products) ? v.products[0] : v.products;
+    // Productos sin control de inventario (bolsa de regalo, kits) no validan stock.
+    if (prod?.track_inventory !== false) {
+      const avail = smap.get(item.variantId) ?? 0;
+      if (avail < item.qty) return { ok: false, error: `Sin stock suficiente para ${v.sku}` };
+    }
+
     const talla = v.attributes?.talla;
     const name = `${prod?.name ?? v.sku}${talla ? ` · Talla ${talla}` : ""}`;
     const lineTotal = v.price_cents * item.qty;

@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { login } from "./actions";
 
 export default async function LoginPage({
@@ -48,6 +49,10 @@ export default async function LoginPage({
             Entrar
           </button>
         </form>
+
+        <Link href="/recuperar" className="mt-5 block text-center text-sm text-muted transition-colors hover:text-gold">
+          ¿Olvidaste tu contraseña?
+        </Link>
       </div>
     </main>
   );

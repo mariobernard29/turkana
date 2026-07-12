@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Gift, ShieldCheck, Truck, Headset } from "lucide-react";
-import { getCart, addToCart, removeFromCart, type CartItem } from "@/lib/cart";
+import { Loader2, Gift, ShieldCheck, Truck, Headset, Plus, Minus } from "lucide-react";
+import { getCart, addToCart, setQty, type CartItem } from "@/lib/cart";
 import { formatMXN, cn } from "@/lib/utils";
 import { startCheckout, type CheckoutInput } from "@/app/checkout/actions";
 import { GIFT_BAG } from "@/lib/business";
@@ -64,10 +64,13 @@ export function CheckoutForm({
   const redeem = useRewards ? maxRedeem : 0;
   const total = goods + shipping - redeem;
 
-  const hasGiftBag = items.some((i) => i.variantId === GIFT_BAG.variantId);
-  const toggleGiftBag = () => {
-    if (hasGiftBag) removeFromCart(GIFT_BAG.variantId);
-    else addToCart({ variantId: GIFT_BAG.variantId, productSlug: GIFT_BAG.productSlug, name: GIFT_BAG.name, sku: GIFT_BAG.sku, priceCents: GIFT_BAG.priceCents, image: null });
+  const giftBagQty = items.find((i) => i.variantId === GIFT_BAG.variantId)?.qty ?? 0;
+  const addGiftBag = () => {
+    addToCart({ variantId: GIFT_BAG.variantId, productSlug: GIFT_BAG.productSlug, name: GIFT_BAG.name, sku: GIFT_BAG.sku, priceCents: GIFT_BAG.priceCents, image: null });
+    setItems(getCart());
+  };
+  const setGiftBagQty = (qty: number) => {
+    setQty(GIFT_BAG.variantId, Math.max(0, qty));
     setItems(getCart());
   };
 
@@ -247,17 +250,37 @@ export function CheckoutForm({
         </div>
 
         {/* Bolsa de regalo */}
-        <button
-          type="button"
-          onClick={toggleGiftBag}
-          className={cn(
-            "mt-4 flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition-colors",
-            hasGiftBag ? "border-gold bg-gold/10" : "border-ink/15 hover:border-gold",
-          )}
-        >
-          <span className="flex items-center gap-2 text-ink"><Gift className="h-4 w-4 text-gold" strokeWidth={1.5} /> Agregar bolsa de regalo</span>
-          <span className={hasGiftBag ? "text-gold" : "text-muted"}>{hasGiftBag ? "✓ Añadida" : `+ ${formatMXN(GIFT_BAG.priceCents)}`}</span>
-        </button>
+        <div className={cn(
+          "mt-4 rounded-xl border px-4 py-3 text-sm transition-colors",
+          giftBagQty > 0 ? "border-gold bg-gold/10" : "border-ink/15",
+        )}>
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-2 text-ink"><Gift className="h-4 w-4 text-gold" strokeWidth={1.5} /> Bolsa de regalo</span>
+            {giftBagQty === 0 ? (
+              <button
+                type="button"
+                onClick={addGiftBag}
+                className="rounded-full border border-ink/15 px-3 py-1 text-xs text-ink transition-colors hover:border-gold hover:text-gold"
+              >
+                + {formatMXN(GIFT_BAG.priceCents)}
+              </button>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setGiftBagQty(giftBagQty - 1)} aria-label="Quitar una bolsa" className="flex h-7 w-7 items-center justify-center rounded-full border border-ink/15 text-ink transition-colors hover:border-gold hover:text-gold">
+                    <Minus className="h-3.5 w-3.5" strokeWidth={2} />
+                  </button>
+                  <span className="w-5 text-center tabular-nums text-ink">{giftBagQty}</span>
+                  <button type="button" onClick={() => setGiftBagQty(giftBagQty + 1)} aria-label="Agregar una bolsa" className="flex h-7 w-7 items-center justify-center rounded-full border border-ink/15 text-ink transition-colors hover:border-gold hover:text-gold">
+                    <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                  </button>
+                </div>
+                <span className="w-16 text-right tabular-nums text-gold">{formatMXN(GIFT_BAG.priceCents * giftBagQty)}</span>
+              </div>
+            )}
+          </div>
+          <p className="mt-1.5 text-xs text-muted">¿Varios regalos? Agrega una bolsa por cada uno (+{formatMXN(GIFT_BAG.priceCents)} c/u).</p>
+        </div>
 
         {/* Turkana Rewards */}
         {customer ? (

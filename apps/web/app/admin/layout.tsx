@@ -24,7 +24,7 @@ export default async function AdminLayout({
       <div className="flex flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-ink/10 bg-white px-6 py-4 shadow-sm">
           <div className="md:hidden">
-            <span className="font-serif text-xl text-ink">Turkana</span>
+            <span className="font-serif text-xl tracking-wide text-ink">TURKANA</span>
           </div>
           <div className="ml-auto flex items-center gap-4">
             <div className="text-right">
