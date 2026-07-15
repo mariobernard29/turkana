@@ -3,9 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { ShopHeader } from "@/components/shop/header";
 import { ShopFooter } from "@/components/shop/footer";
 import { ProductCard, type CatalogProduct } from "@/components/shop/product-card";
+import { EditorialTile } from "@/components/shop/editorial-tile";
 import { Reveal } from "@/components/shop/reveal";
 
 export const dynamic = "force-dynamic";
+
+// Imágenes editoriales que se intercalan cada 6 productos en el listado.
+const CATALOG_TILES = ["/catalogo1.png", "/catalogo2.png", "/catalogo3.png"];
 
 type RawProduct = {
   name: string;
@@ -119,11 +123,23 @@ export default async function ShopPage({
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-x-6 gap-y-12 lg:grid-cols-4">
-            {products.map((p, idx) => (
-              <Reveal key={p.slug} delay={(idx % 4) * 80}>
-                <ProductCard product={p} />
-              </Reveal>
-            ))}
+            {products.flatMap((p, idx) => {
+              const nodes = [
+                <Reveal key={p.slug} delay={(idx % 4) * 80}>
+                  <ProductCard product={p} />
+                </Reveal>,
+              ];
+              // Cada 4 productos (y si no es el último) intercala un mosaico editorial.
+              if ((idx + 1) % 4 === 0 && idx !== products.length - 1) {
+                const tile = CATALOG_TILES[(Math.floor((idx + 1) / 4) - 1) % CATALOG_TILES.length];
+                nodes.push(
+                  <Reveal key={`tile-${idx}`} className="col-span-2">
+                    <EditorialTile src={tile} />
+                  </Reveal>,
+                );
+              }
+              return nodes;
+            })}
           </div>
         )}
       </main>

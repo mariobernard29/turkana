@@ -18,6 +18,11 @@ export function productImageUrl(path: string) {
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/product-images/${path}`;
 }
 
+// URL pública de una imagen en el bucket brand (hero, banners, marketing).
+export function brandImageUrl(path: string) {
+  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/brand/${path}`;
+}
+
 // IVA: los precios se guardan y muestran con IVA INCLUIDO. Esta función
 // desglosa un total para mostrarlo en tickets/facturas (base + IVA).
 export const IVA_RATE = 0.16;

@@ -6,9 +6,11 @@ import { ShopHeader } from "@/components/shop/header";
 import { ShopFooter } from "@/components/shop/footer";
 import { ProductCard, type CatalogProduct } from "@/components/shop/product-card";
 import { HeroCarousel } from "@/components/shop/hero-carousel";
+import { BannerCarousel } from "@/components/shop/banner-carousel";
 import { RewardsSection } from "@/components/shop/rewards-section";
 import { PiercingSection } from "@/components/shop/piercing-section";
 import { Reveal } from "@/components/shop/reveal";
+import { getHeroImages, getBannerSlides } from "@/lib/site-content";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +44,11 @@ async function loadFeatured(): Promise<CatalogProduct[]> {
 }
 
 export default async function Home() {
-  const featured = await loadFeatured();
+  const [featured, heroImages, bannerSlides] = await Promise.all([
+    loadFeatured(),
+    getHeroImages(),
+    getBannerSlides(),
+  ]);
 
   return (
     <div className="min-h-screen overflow-x-hidden">
@@ -63,7 +69,7 @@ export default async function Home() {
           </div>
         </div>
         <div className="relative order-1 aspect-[16/11] md:order-2 md:aspect-auto md:min-h-[520px]">
-          <HeroCarousel images={["/hero1.jpg", "/hero2.jpg", "/hero3.jpg", "/hero4.jpg", "/hero5.jpg"]} />
+          <HeroCarousel images={heroImages} />
         </div>
       </section>
 
@@ -102,6 +108,13 @@ export default async function Home() {
           <Link href="/tienda" className="inline-block rounded-full border border-ink/20 px-8 py-3 text-sm uppercase tracking-widest text-ink transition-colors hover:border-gold hover:bg-gold hover:text-cream">Ver todo</Link>
         </div>
       </section>
+
+      {/* Banner promocional (administrable desde el admin) */}
+      {bannerSlides.length > 0 && (
+        <section className="w-full">
+          <BannerCarousel slides={bannerSlides} />
+        </section>
+      )}
 
       {/* Turkana Rewards */}
       <RewardsSection />
