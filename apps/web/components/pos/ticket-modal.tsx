@@ -5,10 +5,7 @@ import { Check, Printer, Usb } from "lucide-react";
 import type { SaleResult } from "@/app/pos/actions";
 import { formatMXN } from "@/lib/utils";
 import { printReceiptHTML, printEscPosUSB } from "@/lib/print";
-
-const METHOD_LABEL: Record<string, string> = {
-  cash: "Efectivo", card: "Tarjeta", transfer: "Transferencia", rewards: "Rewards",
-};
+import { methodLabel } from "@/lib/payments";
 
 export function TicketModal({
   ticket,
@@ -56,7 +53,7 @@ export function TicketModal({
           <div className="flex justify-between text-muted"><span>IVA (16%)</span><span>{formatMXN(ticket.tax)}</span></div>
           <div className="flex justify-between text-base text-ink"><span className="font-serif">Total</span><span className="font-serif">{formatMXN(ticket.total)}</span></div>
           {ticket.payments.map((p, i) => (
-            <div key={i} className="flex justify-between pt-1 text-muted"><span>Pago {METHOD_LABEL[p.method] ?? p.method}</span><span>{formatMXN(p.amount_cents)}</span></div>
+            <div key={i} className="flex justify-between pt-1 text-muted"><span>Pago {methodLabel(p.method)}</span><span>{formatMXN(p.amount_cents)}</span></div>
           ))}
         </div>
 

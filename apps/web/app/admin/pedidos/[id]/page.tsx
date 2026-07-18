@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatMXN } from "@/lib/utils";
 import { OrderActions } from "@/components/admin/order-actions";
+import { methodLabel } from "@/lib/payments";
 import { STATUS_LABEL, STATUS_STYLE } from "../page";
 
 export const dynamic = "force-dynamic";
@@ -47,11 +48,6 @@ async function loadOrder(id: string) {
   return data as unknown as RawOrder | null;
 }
 
-const METHOD_LABEL: Record<string, string> = {
-  stripe: "Tarjeta (Stripe)", oxxo: "OXXO", cash: "Efectivo",
-  card: "Tarjeta", transfer: "Transferencia", rewards: "Rewards",
-  credit: "Crédito", layaway: "Apartado",
-};
 
 export default async function OrderDetailPage({
   params,
@@ -159,7 +155,7 @@ export default async function OrderDetailPage({
             ) : (
               order.payments.map((p, i) => (
                 <div key={i} className="flex justify-between">
-                  <span className="text-muted">{METHOD_LABEL[p.method] ?? p.method}</span>
+                  <span className="text-muted">{methodLabel(p.method)}</span>
                   <span className="text-ink">
                     {formatMXN(p.amount_cents)}
                     <span className="ml-2 text-xs text-muted">{p.status}</span>

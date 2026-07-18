@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { X, Delete, Check } from "lucide-react";
 import { formatMXN, cn } from "@/lib/utils";
+import type { PaymentMethod } from "@/lib/payments";
 
-type Method = "card" | "transfer" | "rewards" | "cash";
-type Split = { method: "cash" | "card" | "transfer" | "rewards"; amountCents: number };
+type Split = { method: PaymentMethod; amountCents: number };
 
 export function PaymentCalculator({
   total,
@@ -18,37 +18,51 @@ export function PaymentCalculator({
   onConfirm: (payments: Split[]) => void;
   onClose: () => void;
 }) {
-  const methods: { key: Method; label: string }[] = [
-    { key: "card", label: "Tarjeta" },
+  // Métodos disponibles. Los no-efectivo se aplican en este orden; efectivo cubre el resto.
+  const methods: { key: PaymentMethod; label: string }[] = [
+    { key: "debit", label: "Débito" },
+    { key: "credit_card", label: "Crédito" },
+    { key: "amex", label: "American Express" },
     { key: "transfer", label: "Transferencia" },
-    ...(rewardsMax > 0 ? [{ key: "rewards" as Method, label: "Rewards" }] : []),
+    ...(rewardsMax > 0 ? [{ key: "rewards" as PaymentMethod, label: "Rewards" }] : []),
     { key: "cash", label: "Efectivo" },
   ];
+  const nonCashKeys = methods.map((m) => m.key).filter((k) => k !== "cash");
 
-  const [active, setActive] = useState<Method>(rewardsMax > 0 ? "rewards" : "cash");
+  const [active, setActive] = useState<PaymentMethod>(rewardsMax > 0 ? "rewards" : "cash");
   // Montos en centavos como cadena de dígitos (los 2 últimos son decimales).
-  const [d, setD] = useState<Record<Method, string>>({ card: "", transfer: "", rewards: "", cash: "" });
+  const [d, setD] = useState<Record<string, string>>(() =>
+    Object.fromEntries(methods.map((m) => [m.key, ""])),
+  );
 
   const cents = (s: string) => Number(s || "0");
-  const cashReceived = cents(d.cash);
+  const cashReceived = cents(d.cash ?? "");
 
-  const cardApplied = Math.min(cents(d.card), total);
-  const transferApplied = Math.min(cents(d.transfer), total - cardApplied);
-  const rewardsApplied = Math.min(cents(d.rewards), rewardsMax, total - cardApplied - transferApplied);
-  const cashNeeded = Math.max(0, total - cardApplied - transferApplied - rewardsApplied);
-  const tendered = cardApplied + transferApplied + rewardsApplied + cashReceived;
+  // Aplicar cada método no-efectivo en orden, capando a lo que falta (rewards además al saldo).
+  const applied: Record<string, number> = {};
+  let acc = 0;
+  for (const key of nonCashKeys) {
+    const cap = key === "rewards" ? Math.min(rewardsMax, total - acc) : total - acc;
+    const a = Math.max(0, Math.min(cents(d[key] ?? ""), Math.max(0, cap)));
+    applied[key] = a;
+    acc += a;
+  }
+  const nonCashTotal = acc;
+  const cashNeeded = Math.max(0, total - nonCashTotal);
+  const tendered = nonCashTotal + cashReceived;
   const change = Math.max(0, cashReceived - cashNeeded);
   const remaining = Math.max(0, total - tendered);
   const valid = tendered >= total;
 
-  const press = (digit: string) => setD((p) => ({ ...p, [active]: (p[active] + digit).replace(/^0+/, "").slice(0, 9) }));
-  const back = () => setD((p) => ({ ...p, [active]: p[active].slice(0, -1) }));
+  const press = (digit: string) => setD((p) => ({ ...p, [active]: ((p[active] ?? "") + digit).replace(/^0+/, "").slice(0, 9) }));
+  const back = () => setD((p) => ({ ...p, [active]: (p[active] ?? "").slice(0, -1) }));
   const clear = () => setD((p) => ({ ...p, [active]: "" }));
   // Rellena el método activo con lo que falta para llegar al total.
   const exact = () => {
-    const already = (["card", "transfer", "rewards", "cash"] as Method[])
-      .filter((m) => m !== active)
-      .reduce((s, m) => s + Math.min(cents(d[m]), m === "rewards" ? rewardsMax : total), 0);
+    const already = methods
+      .map((m) => m.key)
+      .filter((k) => k !== active)
+      .reduce((s, k) => s + Math.min(cents(d[k] ?? ""), k === "rewards" ? rewardsMax : total), 0);
     let fill = Math.max(0, total - already);
     if (active === "rewards") fill = Math.min(fill, rewardsMax);
     setD((p) => ({ ...p, [active]: String(fill) }));
@@ -56,9 +70,9 @@ export function PaymentCalculator({
 
   const confirm = () => {
     const payments: Split[] = [];
-    if (cardApplied > 0) payments.push({ method: "card", amountCents: cardApplied });
-    if (transferApplied > 0) payments.push({ method: "transfer", amountCents: transferApplied });
-    if (rewardsApplied > 0) payments.push({ method: "rewards", amountCents: rewardsApplied });
+    for (const key of nonCashKeys) {
+      if (applied[key] > 0) payments.push({ method: key, amountCents: applied[key] });
+    }
     if (cashNeeded > 0) payments.push({ method: "cash", amountCents: cashNeeded });
     if (payments.length === 0) payments.push({ method: "cash", amountCents: total });
     onConfirm(payments);

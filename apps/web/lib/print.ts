@@ -1,6 +1,7 @@
 // Impresión del ticket: WebUSB (ESC/POS crudo) o respaldo HTML imprimible.
 import { buildReceipt, type ReceiptData } from "@/lib/escpos";
 import { STORE } from "@/lib/business";
+import { methodLabel } from "@/lib/payments";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -27,10 +28,6 @@ export async function printEscPosUSB(data: ReceiptData): Promise<void> {
 }
 
 const money = (c: number) => `$${(c / 100).toFixed(2)}`;
-const METHOD: Record<string, string> = {
-  cash: "Efectivo", card: "Tarjeta", transfer: "Transferencia",
-  stripe: "Tarjeta", oxxo: "OXXO", layaway: "Apartado", rewards: "Rewards",
-};
 
 // Respaldo universal: abre una ventana con el ticket (80mm) y lanza imprimir.
 export function printReceiptHTML(data: ReceiptData): void {
@@ -41,7 +38,7 @@ export function printReceiptHTML(data: ReceiptData): void {
     .join("");
 
   const payRows = (data.payments ?? (data.method ? [{ method: data.method, amount_cents: data.total }] : []))
-    .map((p) => `<tr><td>${METHOD[p.method] ?? p.method}</td><td class="r">${money(p.amount_cents)}</td></tr>`).join("");
+    .map((p) => `<tr><td>${methodLabel(p.method)}</td><td class="r">${money(p.amount_cents)}</td></tr>`).join("");
 
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${data.orderNumber}</title>
   <style>

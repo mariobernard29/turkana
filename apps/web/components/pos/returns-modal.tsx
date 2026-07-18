@@ -7,8 +7,9 @@ import type { PosVariant } from "@/components/pos/pos-sale";
 import { printReceiptHTML } from "@/lib/print";
 import { VariantSearch } from "@/components/pos/variant-search";
 import { formatMXN } from "@/lib/utils";
+import { POS_METHODS } from "@/lib/payments";
 
-type Method = "cash" | "card" | "transfer";
+type Method = "cash" | "debit" | "credit_card" | "amex" | "transfer";
 const field = "w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm outline-none focus:border-gold";
 const label = "mb-1.5 block text-xs uppercase tracking-wider text-muted";
 
@@ -60,7 +61,7 @@ export function ReturnsModal({
             <div><label className={label}>Cantidad</label><input className={field} type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} /></div>
             <div><label className={label}>Método (diferencia)</label>
               <select className={field} value={method} onChange={(e) => setMethod(e.target.value as Method)}>
-                <option value="cash">Efectivo</option><option value="card">Tarjeta</option><option value="transfer">Transferencia</option>
+                {POS_METHODS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
               </select>
             </div>
           </div>

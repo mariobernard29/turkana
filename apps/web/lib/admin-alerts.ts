@@ -130,8 +130,8 @@ export type CashCutPayload = {
   cashier: string; registerName: string; openedAt: string; closedAt: string;
   openingFloat: number; salesCount: number; discountsCents: number; refundsCents: number;
   dropsCents: number; precutsCents: number; peopleServed: number;
-  expectedCash: number; expectedCard: number; expectedTransfer: number;
-  countedCash: number; countedCard: number; countedTransfer: number; difference: number;
+  expectedCash: number; expectedDebit: number; expectedCredit: number; expectedAmex: number; expectedTransfer: number;
+  countedCash: number; countedDebit: number; countedCredit: number; countedAmex: number; countedTransfer: number; difference: number;
   lote: string;
 };
 
@@ -178,11 +178,15 @@ export async function notifyCashCut(p: CashCutPayload) {
       ${p.precutsCents > 0 ? row("Precortes", money(p.precutsCents)) : ""}
       <tr><td colspan="2" style="padding:8px 0 2px;font-weight:bold">Esperado</td></tr>
       ${row("Efectivo esperado", money(p.expectedCash))}
-      ${row("Tarjeta esperada", money(p.expectedCard))}
+      ${row("Débito esperado", money(p.expectedDebit))}
+      ${row("Crédito esperado", money(p.expectedCredit))}
+      ${row("Amex esperado", money(p.expectedAmex))}
       ${row("Transferencia esperada", money(p.expectedTransfer))}
       <tr><td colspan="2" style="padding:8px 0 2px;font-weight:bold">Contado</td></tr>
       ${row("Efectivo contado", money(p.countedCash))}
-      ${row("Tarjeta contada", money(p.countedCard))}
+      ${row("Débito contado", money(p.countedDebit))}
+      ${row("Crédito contado", money(p.countedCredit))}
+      ${row("Amex contado", money(p.countedAmex))}
       ${row("Transferencia contada", money(p.countedTransfer))}
     </table>
     <p style="margin:14px 0 0;font-size:15px;text-align:right"><strong>Diferencia: <span style="color:${diffColor}">${p.difference >= 0 ? "+" : ""}${money(p.difference)}</span></strong></p>`;

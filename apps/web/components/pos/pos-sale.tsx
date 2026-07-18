@@ -8,6 +8,7 @@ import { chargeSale, type SaleResult } from "@/app/pos/actions";
 import { getCajaInfo } from "@/app/pos/caja-actions";
 import { lookupRewardsCustomer } from "@/app/pos/rewards-actions";
 import { formatMXN, productImageUrl, cn } from "@/lib/utils";
+import { POS_CARD_BUTTONS, type PaymentMethod } from "@/lib/payments";
 import { PosClose } from "@/components/pos/pos-close";
 import { TicketModal } from "@/components/pos/ticket-modal";
 import { AccountsPanel } from "@/components/pos/accounts-panel";
@@ -32,7 +33,7 @@ export type PosVariant = { variantId: string; sku: string; name: string; priceCe
 type Line = { variantId: string; name: string; sku: string; priceCents: number; qty: number; stock: number };
 
 const TAX_RATE = 0.16;
-type Split = { method: "cash" | "card" | "transfer" | "rewards"; amountCents: number };
+type Split = { method: PaymentMethod; amountCents: number };
 
 export function PosSale({
   session,
@@ -403,23 +404,28 @@ export function PosSale({
 
           {error && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="mt-4 space-y-2">
             <button
               onClick={() => charge([{ method: "cash", amountCents: total }])}
               disabled={cobroDisabled}
-              className="flex flex-col items-center rounded-2xl bg-ink py-3 text-cream transition-colors hover:bg-gold-dark disabled:opacity-40"
+              className="flex w-full flex-col items-center rounded-2xl bg-ink py-3 text-cream transition-colors hover:bg-gold-dark disabled:opacity-40"
             >
               <span className="text-[11px] uppercase tracking-widest">Efectivo</span>
               <span className="text-lg font-semibold tabular-nums">{formatMXN(total)}</span>
             </button>
-            <button
-              onClick={() => charge([{ method: "card", amountCents: total }])}
-              disabled={cobroDisabled}
-              className="flex flex-col items-center rounded-2xl bg-ink py-3 text-cream transition-colors hover:bg-gold-dark disabled:opacity-40"
-            >
-              <span className="text-[11px] uppercase tracking-widest">Tarjeta</span>
-              <span className="text-lg font-semibold tabular-nums">{formatMXN(total)}</span>
-            </button>
+            <div className="grid grid-cols-3 gap-2">
+              {POS_CARD_BUTTONS.map((b) => (
+                <button
+                  key={b.key}
+                  onClick={() => charge([{ method: b.key, amountCents: total }])}
+                  disabled={cobroDisabled}
+                  className="flex flex-col items-center rounded-2xl bg-ink py-3 text-cream transition-colors hover:bg-gold-dark disabled:opacity-40"
+                >
+                  <span className="text-[11px] uppercase tracking-widest">{b.label}</span>
+                  <span className="text-sm font-semibold tabular-nums">{formatMXN(total)}</span>
+                </button>
+              ))}
+            </div>
           </div>
           <button
             onClick={() => setShowCalc(true)}

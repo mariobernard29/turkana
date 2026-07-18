@@ -51,7 +51,7 @@ export async function createLayaway(input: {
   variantId?: string;
   totalPesos: number;
   anticipoPesos: number;
-  method: "cash" | "card" | "transfer";
+  method: "cash" | "debit" | "credit_card" | "amex" | "transfer";
   dueDate?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const staff = await requireStaff();
@@ -87,7 +87,7 @@ export async function createLayaway(input: {
 }
 
 export async function addLayawayPayment(input: {
-  sessionId: string; layawayId: string; amountPesos: number; method: "cash" | "card" | "transfer";
+  sessionId: string; layawayId: string; amountPesos: number; method: "cash" | "debit" | "credit_card" | "amex" | "transfer";
 }): Promise<{ ok: boolean; error?: string }> {
   const staff = await requireStaff();
   const db = createAdminClient();
@@ -195,7 +195,7 @@ export async function addCreditCharge(input: {
 }
 
 export async function addCreditPayment(input: {
-  sessionId: string; accountId: string; amountPesos: number; method: "cash" | "card" | "transfer";
+  sessionId: string; accountId: string; amountPesos: number; method: "cash" | "debit" | "credit_card" | "amex" | "transfer";
 }): Promise<{ ok: boolean; error?: string }> {
   const staff = await requireStaff();
   const db = createAdminClient();

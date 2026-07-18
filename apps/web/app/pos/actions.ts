@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkLowStockAfterSale, notifyCashCut } from "@/lib/admin-alerts";
+import type { PaymentMethod } from "@/lib/payments";
+import { CARD_METHODS } from "@/lib/payments";
 
 type DB = ReturnType<typeof createAdminClient>;
 const TAX_RATE = 0.16;
@@ -48,7 +50,7 @@ export type SaleResult = {
   };
 };
 
-export type PaymentSplit = { method: "cash" | "card" | "transfer" | "rewards"; amountCents: number };
+export type PaymentSplit = { method: PaymentMethod; amountCents: number };
 export type DiscountInput = { cents: number; authorizedBy?: string; concept?: string };
 
 type ServiceInput = { concept: string; description?: string; amountCents: number };
@@ -309,13 +311,16 @@ async function computeTotals(db: DB, sessionId: string) {
   const { data: movs } = await db
     .from("cash_movements").select("type, method, amount_cents").eq("session_id", sessionId);
 
-  let cash = opening, card = 0, transfer = 0, sales = 0, refunds = 0, drops = 0, precuts = 0;
+  let cash = opening, debit = 0, credit = 0, amex = 0, cardLegacy = 0, transfer = 0, sales = 0, refunds = 0, drops = 0, precuts = 0;
   for (const m of (movs as unknown as { type: string; method: string | null; amount_cents: number }[]) ?? []) {
     const amt = m.amount_cents;
     if (m.type === "sale") {
       sales++;
       if (m.method === "cash") cash += amt;
-      else if (m.method === "card") card += amt;
+      else if (m.method === "debit") debit += amt;
+      else if (m.method === "credit_card") credit += amt;
+      else if (m.method === "amex") amex += amt;
+      else if (m.method === "card") cardLegacy += amt; // ventas antiguas (tarjeta sin separar)
       else if (m.method === "transfer") transfer += amt;
     } else if (m.type === "in") cash += amt;
     else if (m.type === "refund") { cash -= amt; refunds += amt; }
@@ -328,7 +333,13 @@ async function computeTotals(db: DB, sessionId: string) {
   const { data: ords } = await db.from("orders").select("discount_cents").eq("cash_session_id", sessionId);
   const discounts = ((ords as unknown as { discount_cents: number }[]) ?? []).reduce((s, o) => s + (o.discount_cents ?? 0), 0);
 
-  return { openingFloat: opening, expectedCash: cash, expectedCard: card, expectedTransfer: transfer, salesCount: sales, refundsCents: refunds, dropsCents: drops, discountsCents: discounts, precutsCents: precuts };
+  return {
+    openingFloat: opening, expectedCash: cash,
+    expectedDebit: debit, expectedCredit: credit, expectedAmex: amex,
+    expectedCard: cardLegacy, // legacy "tarjeta" sin separar (0 en sesiones nuevas)
+    expectedTransfer: transfer,
+    salesCount: sales, refundsCents: refunds, dropsCents: drops, discountsCents: discounts, precutsCents: precuts,
+  };
 }
 
 export async function getSessionTotals(sessionId: string) {
@@ -341,7 +352,9 @@ export async function getSessionTotals(sessionId: string) {
 export async function closeSession(input: {
   sessionId: string;
   countedCashPesos: number;
-  countedCardPesos: number;
+  countedDebitPesos: number;
+  countedCreditPesos: number;
+  countedAmexPesos: number;
   countedTransferPesos: number;
   peopleServed?: number;
 }): Promise<{ ok: boolean; error?: string; summary?: { expectedCash: number; countedCash: number; difference: number } }> {
@@ -350,7 +363,9 @@ export async function closeSession(input: {
 
   const totals = await computeTotals(db, input.sessionId);
   const countedCash = Math.round((input.countedCashPesos || 0) * 100);
-  const countedCard = Math.round((input.countedCardPesos || 0) * 100);
+  const countedDebit = Math.round((input.countedDebitPesos || 0) * 100);
+  const countedCredit = Math.round((input.countedCreditPesos || 0) * 100);
+  const countedAmex = Math.round((input.countedAmexPesos || 0) * 100);
   const countedTransfer = Math.round((input.countedTransferPesos || 0) * 100);
   const difference = countedCash - totals.expectedCash;
   const peopleServed = Math.max(0, Math.round(input.peopleServed || 0));
@@ -359,7 +374,10 @@ export async function closeSession(input: {
   const { error } = await db.from("cash_sessions").update({
     status: "closed",
     counted_cash_cents: countedCash,
-    counted_card_cents: countedCard,
+    counted_debit_cents: countedDebit,
+    counted_credit_cents: countedCredit,
+    counted_amex_cents: countedAmex,
+    counted_card_cents: countedDebit + countedCredit + countedAmex, // total tarjeta (compat históricos)
     counted_transfer_cents: countedTransfer,
     expected_cash_cents: totals.expectedCash,
     difference_cents: difference,
@@ -373,7 +391,7 @@ export async function closeSession(input: {
     type: "cash_cut",
     title: "Corte de caja",
     body: `Esperado efectivo $${(totals.expectedCash / 100).toFixed(2)} · contado $${(countedCash / 100).toFixed(2)} · diferencia $${(difference / 100).toFixed(2)}`,
-    data: { session_id: input.sessionId, ...totals, countedCash, countedCard, countedTransfer, difference },
+    data: { session_id: input.sessionId, ...totals, countedCash, countedDebit, countedCredit, countedAmex, countedTransfer, difference },
     target_role: "admin",
   });
 
@@ -389,8 +407,9 @@ export async function closeSession(input: {
     openingFloat: totals.openingFloat, salesCount: totals.salesCount,
     discountsCents: totals.discountsCents, refundsCents: totals.refundsCents,
     dropsCents: totals.dropsCents, precutsCents: totals.precutsCents,
-    expectedCash: totals.expectedCash, expectedCard: totals.expectedCard, expectedTransfer: totals.expectedTransfer,
-    countedCash, countedCard, countedTransfer, difference,
+    expectedCash: totals.expectedCash, expectedTransfer: totals.expectedTransfer,
+    expectedDebit: totals.expectedDebit, expectedCredit: totals.expectedCredit, expectedAmex: totals.expectedAmex,
+    countedCash, countedDebit, countedCredit, countedAmex, countedTransfer, difference,
   });
 
   revalidatePath("/pos");

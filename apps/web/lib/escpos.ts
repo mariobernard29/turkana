@@ -1,5 +1,6 @@
 // Constructor de tickets ESC/POS (impresoras térmicas 80mm).
 import { STORE } from "@/lib/business";
+import { methodLabel } from "@/lib/payments";
 
 export type ReceiptData = {
   orderNumber: string;
@@ -13,10 +14,6 @@ export type ReceiptData = {
 };
 
 const WIDTH = 42; // columnas a 80mm, fuente A
-const METHOD: Record<string, string> = {
-  cash: "Efectivo", card: "Tarjeta", transfer: "Transferencia",
-  stripe: "Tarjeta", oxxo: "OXXO", layaway: "Apartado", rewards: "Rewards", credit: "Credito",
-} as const;
 
 const stripAccents = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
 const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
@@ -78,7 +75,7 @@ export function buildReceipt(d: ReceiptData): Uint8Array {
   cmd(GS, 0x21, 0x00);
   emph(false);
   const pays = d.payments ?? (d.method ? [{ method: d.method, amount_cents: d.total }] : []);
-  for (const p of pays) line(padLine(`Pago ${METHOD[p.method] ?? p.method}`, money(p.amount_cents)));
+  for (const p of pays) line(padLine(`Pago ${methodLabel(p.method)}`, money(p.amount_cents)));
 
   line("=".repeat(WIDTH));
   center();

@@ -1,6 +1,7 @@
 // Base local (IndexedDB vía Dexie) para el POS offline-first.
 // Guarda el catálogo en caché y la cola (outbox) de ventas hechas sin conexión.
 import Dexie, { type Table } from "dexie";
+import type { PaymentMethod } from "@/lib/payments";
 
 export type CachedSize = { variantId: string; talla: string; priceCents: number; stock: number; lowThreshold: number };
 export type CachedProduct = {
@@ -17,7 +18,7 @@ export type OutboxOp = {
   sessionId: string;
   items: { variantId: string; qty: number }[];
   services?: { concept: string; description?: string; amountCents: number }[];
-  payments: { method: "cash" | "card" | "transfer" | "rewards"; amountCents: number }[];
+  payments: { method: PaymentMethod; amountCents: number }[];
   customerId?: string;
   discount?: { cents: number; authorizedBy?: string; concept?: string };
   createdAtIso: string;

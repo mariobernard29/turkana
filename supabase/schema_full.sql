@@ -332,7 +332,7 @@ create table payments (
   id                       uuid primary key default gen_random_uuid(),
   order_id                 uuid references orders(id),
   method                   text not null
-    check (method in ('cash','card','transfer','stripe','oxxo','rewards','credit','layaway')),
+    check (method in ('cash','card','debit','credit_card','amex','transfer','stripe','oxxo','rewards','credit','layaway')),
   amount_cents             bigint not null,
   status                   text not null default 'completed'
     check (status in ('pending','completed','failed','refunded')),
@@ -381,6 +381,9 @@ create table cash_sessions (
   status                 text not null default 'open' check (status in ('open','closed')),
   counted_cash_cents     bigint,
   counted_card_cents     bigint,
+  counted_debit_cents    bigint,
+  counted_credit_cents   bigint,
+  counted_amex_cents     bigint,
   counted_transfer_cents bigint,
   expected_cash_cents    bigint,
   difference_cents       bigint,
@@ -394,7 +397,7 @@ create table cash_movements (
   id         uuid primary key default gen_random_uuid(),
   session_id uuid not null references cash_sessions(id),
   type       text not null check (type in ('sale','refund','expense','drop','in','out','precut')),
-  method     text check (method in ('cash','card','transfer')),
+  method     text check (method in ('cash','card','debit','credit_card','amex','transfer')),
   amount_cents bigint not null,
   reference_id uuid,
   notes      text,
@@ -468,7 +471,7 @@ create table layaway_payments (
   id          uuid primary key default gen_random_uuid(),
   layaway_id  uuid not null references layaways(id) on delete cascade,
   amount_cents bigint not null,
-  method      text check (method in ('cash','card','transfer')),
+  method      text check (method in ('cash','card','debit','credit_card','amex','transfer')),
   created_by  uuid references auth.users(id),
   created_at  timestamptz not null default now()
 );

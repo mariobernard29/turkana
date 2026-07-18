@@ -5,7 +5,7 @@ import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type DB = ReturnType<typeof createAdminClient>;
-type Method = "cash" | "card" | "transfer";
+type Method = "cash" | "debit" | "credit_card" | "amex" | "transfer";
 const pesos = (n: number) => Math.round((n || 0) * 100);
 
 async function tiendaLoc(db: DB): Promise<string | null> {
@@ -17,18 +17,27 @@ async function sessionTotals(db: DB, sessionId: string) {
   const { data: sess } = await db.from("cash_sessions").select("opening_float_cents").eq("id", sessionId).maybeSingle();
   const opening = (sess as { opening_float_cents: number } | null)?.opening_float_cents ?? 0;
   const { data: movs } = await db.from("cash_movements").select("type, method, amount_cents").eq("session_id", sessionId);
-  let cash = opening, card = 0, transfer = 0, sales = 0;
+  let cash = opening, debit = 0, credit = 0, amex = 0, cardLegacy = 0, transfer = 0, sales = 0;
   for (const m of (movs as unknown as { type: string; method: string | null; amount_cents: number }[]) ?? []) {
     const a = m.amount_cents;
-    if (m.type === "sale") { sales++; if (m.method === "cash") cash += a; else if (m.method === "card") card += a; else if (m.method === "transfer") transfer += a; }
+    if (m.type === "sale") {
+      sales++;
+      if (m.method === "cash") cash += a;
+      else if (m.method === "debit") debit += a;
+      else if (m.method === "credit_card") credit += a;
+      else if (m.method === "amex") amex += a;
+      else if (m.method === "card") cardLegacy += a;
+      else if (m.method === "transfer") transfer += a;
+    }
     else if (m.type === "in") cash += a;
     else if (["out", "drop", "expense", "refund"].includes(m.type)) cash -= a;
   }
-  return { expectedCash: cash, expectedCard: card, expectedTransfer: transfer, salesCount: sales };
+  return { expectedCash: cash, expectedDebit: debit, expectedCredit: credit, expectedAmex: amex, expectedCard: cardLegacy, expectedTransfer: transfer, salesCount: sales };
 }
 
 export type CajaInfo = {
-  expectedCash: number; expectedCard: number; expectedTransfer: number; salesCount: number;
+  expectedCash: number; expectedTransfer: number; salesCount: number;
+  expectedDebit: number; expectedCredit: number; expectedAmex: number; expectedCard: number;
   thresholdCents: number;
   staff: { id: string; full_name: string }[];
 };
@@ -73,15 +82,16 @@ export async function createCashDrop(input: {
 
 // ── Precorte (corte parcial / cambio de cajero) ──────────────────────────────
 export async function precut(input: {
-  sessionId: string; cashPesos: number; cardPesos: number; transferPesos: number; newCashierId?: string;
+  sessionId: string; cashPesos: number; debitPesos: number; creditPesos: number; amexPesos: number; transferPesos: number; newCashierId?: string;
 }): Promise<{ ok: boolean; error?: string; comprobante?: Comprobante }> {
   const staff = await requireStaff();
   const db = createAdminClient();
-  const cash = pesos(input.cashPesos), card = pesos(input.cardPesos), transfer = pesos(input.transferPesos);
+  const cash = pesos(input.cashPesos), debit = pesos(input.debitPesos), credit = pesos(input.creditPesos), amex = pesos(input.amexPesos), transfer = pesos(input.transferPesos);
+  const card = debit + credit + amex;
 
   await db.from("cash_movements").insert({
     session_id: input.sessionId, type: "precut", method: "cash", amount_cents: cash,
-    notes: `Precorte · tarjeta ${(card / 100).toFixed(2)} · transfer ${(transfer / 100).toFixed(2)}`,
+    notes: `Precorte · débito ${(debit / 100).toFixed(2)} · crédito ${(credit / 100).toFixed(2)} · amex ${(amex / 100).toFixed(2)} · transfer ${(transfer / 100).toFixed(2)}`,
     created_by: staff.id,
   });
   if (input.newCashierId) {
@@ -95,7 +105,9 @@ export async function precut(input: {
       orderNumber: "PRECORTE",
       items: [
         { name: "Efectivo", quantity: 1, total_cents: cash },
-        { name: "Tarjeta", quantity: 1, total_cents: card },
+        { name: "Débito", quantity: 1, total_cents: debit },
+        { name: "Crédito", quantity: 1, total_cents: credit },
+        { name: "American Express", quantity: 1, total_cents: amex },
         { name: "Transferencias", quantity: 1, total_cents: transfer },
       ],
       subtotal: cash + card + transfer, tax: 0, total: cash + card + transfer, method: "-",

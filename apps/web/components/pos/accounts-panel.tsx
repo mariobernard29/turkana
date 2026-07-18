@@ -9,8 +9,9 @@ import {
 import type { PosVariant } from "@/components/pos/pos-sale";
 import { VariantSearch } from "@/components/pos/variant-search";
 import { formatMXN, cn } from "@/lib/utils";
+import { POS_METHODS } from "@/lib/payments";
 
-type Method = "cash" | "card" | "transfer";
+type Method = "cash" | "debit" | "credit_card" | "amex" | "transfer";
 
 export function AccountsPanel({
   sessionId,
@@ -106,7 +107,7 @@ function Layaways({
             <input className={field} type="number" step="0.01" placeholder="Total" value={f.total} onChange={(e) => setF({ ...f, total: e.target.value })} />
             <input className={field} type="number" step="0.01" placeholder="Anticipo" value={f.anticipo} onChange={(e) => setF({ ...f, anticipo: e.target.value })} />
             <select className={field} value={f.method} onChange={(e) => setF({ ...f, method: e.target.value as Method })}>
-              <option value="cash">Efectivo</option><option value="card">Tarjeta</option><option value="transfer">Transferencia</option>
+              {POS_METHODS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
             </select>
             <input className={field} type="date" value={f.dueDate} onChange={(e) => setF({ ...f, dueDate: e.target.value })} />
           </div>
@@ -148,7 +149,7 @@ function Layaways({
                   <>
                     <input className={cn(field, "w-28")} type="number" step="0.01" placeholder="Abono" value={abono.amount} onChange={(e) => setAbono({ ...abono, amount: e.target.value })} />
                     <select className={cn(field, "w-32")} value={abono.method} onChange={(e) => setAbono({ ...abono, method: e.target.value as Method })}>
-                      <option value="cash">Efectivo</option><option value="card">Tarjeta</option><option value="transfer">Transferencia</option>
+                      {POS_METHODS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
                     </select>
                     <button disabled={busy} onClick={async () => { const ok = await run(() => addLayawayPayment({ sessionId, layawayId: l.id, amountPesos: Number(abono.amount), method: abono.method }), "Abono registrado"); if (ok) setAbono(null); }} className="rounded-full bg-ink px-4 py-2 text-xs uppercase tracking-wider text-cream">Confirmar</button>
                     <button onClick={() => setAbono(null)} className="text-xs text-muted">Cancelar</button>
@@ -217,7 +218,7 @@ function Credits({
                   <input className={cn(field, "w-28")} type="number" step="0.01" placeholder="Importe" value={act.amount} onChange={(e) => setAct({ ...act, amount: e.target.value })} />
                   {act.kind === "pay" && (
                     <select className={cn(field, "w-32")} value={act.method} onChange={(e) => setAct({ ...act, method: e.target.value as Method })}>
-                      <option value="cash">Efectivo</option><option value="card">Tarjeta</option><option value="transfer">Transferencia</option>
+                      {POS_METHODS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
                     </select>
                   )}
                   {act.kind === "charge" && (

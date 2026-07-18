@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatMXN } from "@/lib/utils";
+import { methodLabel } from "@/lib/payments";
 import { KpiCard } from "@/components/admin/kpi-card";
 
 export const dynamic = "force-dynamic";
@@ -17,11 +18,6 @@ function startOf(range: Range): Date {
   else if (range === "year") d.setFullYear(d.getFullYear() - 1);
   return d;
 }
-
-const METHOD_LABEL: Record<string, string> = {
-  cash: "Efectivo", card: "Tarjeta", transfer: "Transferencia", stripe: "Tarjeta (online)",
-  oxxo: "OXXO", layaway: "Apartado", rewards: "Rewards", credit: "Crédito",
-};
 
 async function loadReport(range: Range) {
   const db = createAdminClient();
@@ -120,7 +116,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               {r.methods.map(([m, v]) => (
                 <div key={m}>
                   <div className="mb-1 flex justify-between text-sm">
-                    <span className="text-ink">{METHOD_LABEL[m] ?? m}</span>
+                    <span className="text-ink">{methodLabel(m)}</span>
                     <span className="text-muted">{formatMXN(v)}</span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-sand">

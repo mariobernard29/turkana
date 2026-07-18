@@ -7,7 +7,8 @@ import { getSessionTotals, closeSession } from "@/app/pos/actions";
 import { formatMXN, cn } from "@/lib/utils";
 
 type Totals = {
-  openingFloat: number; expectedCash: number; expectedCard: number; expectedTransfer: number; salesCount: number;
+  openingFloat: number; expectedCash: number; expectedTransfer: number; salesCount: number;
+  expectedDebit: number; expectedCredit: number; expectedAmex: number; expectedCard: number;
   refundsCents: number; dropsCents: number; discountsCents: number; precutsCents: number;
 };
 
@@ -21,7 +22,9 @@ export function PosClose({
   const router = useRouter();
   const [totals, setTotals] = useState<Totals | null>(null);
   const [cash, setCash] = useState("");
-  const [card, setCard] = useState("");
+  const [debit, setDebit] = useState("");
+  const [credit, setCredit] = useState("");
+  const [amex, setAmex] = useState("");
   const [transfer, setTransfer] = useState("");
   const [people, setPeople] = useState("");
   const [busy, setBusy] = useState(false);
@@ -39,7 +42,9 @@ export function PosClose({
     const res = await closeSession({
       sessionId,
       countedCashPesos: Number(cash) || 0,
-      countedCardPesos: Number(card) || 0,
+      countedDebitPesos: Number(debit) || 0,
+      countedCreditPesos: Number(credit) || 0,
+      countedAmexPesos: Number(amex) || 0,
       countedTransferPesos: Number(transfer) || 0,
       peopleServed: Number(people) || 0,
     });
@@ -88,13 +93,18 @@ export function PosClose({
               {totals.dropsCents > 0 && <div className="flex justify-between text-muted"><span>Resguardos</span><span>−{formatMXN(totals.dropsCents)}</span></div>}
               {totals.precutsCents > 0 && <div className="flex justify-between text-muted"><span>Precortes</span><span>{formatMXN(totals.precutsCents)}</span></div>}
               <div className="mt-1 flex justify-between border-t border-ink/10 pt-1 text-muted"><span>Efectivo esperado</span><span className="text-ink">{formatMXN(totals.expectedCash)}</span></div>
-              <div className="flex justify-between text-muted"><span>Tarjeta esperada</span><span className="text-ink">{formatMXN(totals.expectedCard)}</span></div>
+              <div className="flex justify-between text-muted"><span>Débito esperado</span><span className="text-ink">{formatMXN(totals.expectedDebit)}</span></div>
+              <div className="flex justify-between text-muted"><span>Crédito esperado</span><span className="text-ink">{formatMXN(totals.expectedCredit)}</span></div>
+              <div className="flex justify-between text-muted"><span>Amex esperado</span><span className="text-ink">{formatMXN(totals.expectedAmex)}</span></div>
+              {totals.expectedCard > 0 && <div className="flex justify-between text-muted"><span>Tarjeta (histórico)</span><span className="text-ink">{formatMXN(totals.expectedCard)}</span></div>}
               <div className="flex justify-between text-muted"><span>Transferencia esperada</span><span className="text-ink">{formatMXN(totals.expectedTransfer)}</span></div>
             </div>
 
             <div className="space-y-4">
               <div><label className={label}>Efectivo contado</label><input type="number" step="0.01" inputMode="decimal" className={field} value={cash} onChange={(e) => setCash(e.target.value)} required /></div>
-              <div><label className={label}>Tarjeta</label><input type="number" step="0.01" inputMode="decimal" className={field} value={card} onChange={(e) => setCard(e.target.value)} /></div>
+              <div><label className={label}>Débito contado</label><input type="number" step="0.01" inputMode="decimal" className={field} value={debit} onChange={(e) => setDebit(e.target.value)} /></div>
+              <div><label className={label}>Crédito contado</label><input type="number" step="0.01" inputMode="decimal" className={field} value={credit} onChange={(e) => setCredit(e.target.value)} /></div>
+              <div><label className={label}>American Express contado</label><input type="number" step="0.01" inputMode="decimal" className={field} value={amex} onChange={(e) => setAmex(e.target.value)} /></div>
               <div><label className={label}>Transferencias</label><input type="number" step="0.01" inputMode="decimal" className={field} value={transfer} onChange={(e) => setTransfer(e.target.value)} /></div>
               <div><label className={label}>Personas atendidas</label><input type="number" min="0" step="1" inputMode="numeric" className={field} value={people} onChange={(e) => setPeople(e.target.value)} placeholder="¿A cuántas personas atendiste hoy?" /></div>
             </div>

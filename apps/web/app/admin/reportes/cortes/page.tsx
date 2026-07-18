@@ -13,6 +13,9 @@ type Row = {
   opening_float_cents: number;
   counted_cash_cents: number | null;
   counted_card_cents: number | null;
+  counted_debit_cents: number | null;
+  counted_credit_cents: number | null;
+  counted_amex_cents: number | null;
   counted_transfer_cents: number | null;
   expected_cash_cents: number | null;
   difference_cents: number | null;
@@ -25,7 +28,7 @@ async function load(f: Filters): Promise<{ rows: Row[]; names: Record<string, st
     const db = createAdminClient();
     let q = db
       .from("cash_sessions")
-      .select("id, opened_at, closed_at, opening_float_cents, counted_cash_cents, counted_card_cents, counted_transfer_cents, expected_cash_cents, difference_cents, cashier_id, cash_registers(name)")
+      .select("id, opened_at, closed_at, opening_float_cents, counted_cash_cents, counted_card_cents, counted_debit_cents, counted_credit_cents, counted_amex_cents, counted_transfer_cents, expected_cash_cents, difference_cents, cashier_id, cash_registers(name)")
       .eq("status", "closed")
       .order("closed_at", { ascending: false })
       .limit(200);
@@ -101,7 +104,15 @@ export default async function CortesPage({ searchParams }: { searchParams: Promi
                 <Detail label="Fondo inicial" value={formatMXN(s.opening_float_cents)} />
                 <Detail label="Efectivo esperado" value={formatMXN(s.expected_cash_cents ?? 0)} />
                 <Detail label="Efectivo contado" value={formatMXN(s.counted_cash_cents ?? 0)} />
-                <Detail label="Tarjeta contada" value={formatMXN(s.counted_card_cents ?? 0)} />
+                {s.counted_debit_cents == null && s.counted_credit_cents == null && s.counted_amex_cents == null ? (
+                  <Detail label="Tarjeta contada" value={formatMXN(s.counted_card_cents ?? 0)} />
+                ) : (
+                  <>
+                    <Detail label="Débito contado" value={formatMXN(s.counted_debit_cents ?? 0)} />
+                    <Detail label="Crédito contado" value={formatMXN(s.counted_credit_cents ?? 0)} />
+                    <Detail label="Amex contado" value={formatMXN(s.counted_amex_cents ?? 0)} />
+                  </>
+                )}
                 <Detail label="Transferencias" value={formatMXN(s.counted_transfer_cents ?? 0)} />
                 <Detail label="Apertura" value={new Date(s.opened_at).toLocaleString("es-MX")} />
               </div>

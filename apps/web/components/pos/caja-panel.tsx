@@ -23,7 +23,9 @@ export function CajaPanel({
   const [notes, setNotes] = useState("");
 
   const [cash, setCash] = useState("");
-  const [card, setCard] = useState("");
+  const [debit, setDebit] = useState("");
+  const [credit, setCredit] = useState("");
+  const [amex, setAmex] = useState("");
   const [transfer, setTransfer] = useState("");
   const [newCashier, setNewCashier] = useState("");
 
@@ -44,12 +46,12 @@ export function CajaPanel({
 
   const doPrecut = async () => {
     setBusy(true); setMsg(null);
-    const res = await precut({ sessionId, cashPesos: Number(cash), cardPesos: Number(card), transferPesos: Number(transfer), newCashierId: newCashier || undefined });
+    const res = await precut({ sessionId, cashPesos: Number(cash), debitPesos: Number(debit), creditPesos: Number(credit), amexPesos: Number(amex), transferPesos: Number(transfer), newCashierId: newCashier || undefined });
     setBusy(false);
     if (!res.ok) { setMsg({ k: "err", t: res.error ?? "Error" }); return; }
     if (res.comprobante) printReceiptHTML(res.comprobante);
     setMsg({ k: "ok", t: newCashier ? "Precorte hecho · cajero actualizado" : "Precorte registrado" });
-    setCash(""); setCard(""); setTransfer(""); setNewCashier(""); reload();
+    setCash(""); setDebit(""); setCredit(""); setAmex(""); setTransfer(""); setNewCashier(""); reload();
   };
 
   return (
@@ -69,7 +71,10 @@ export function CajaPanel({
           <>
             <div className="mb-4 space-y-1 rounded-xl bg-cream p-4 text-sm">
               <div className="flex justify-between text-muted"><span>Efectivo en caja</span><span className="text-ink">{formatMXN(info.expectedCash)}</span></div>
-              <div className="flex justify-between text-muted"><span>Tarjeta</span><span className="text-ink">{formatMXN(info.expectedCard)}</span></div>
+              <div className="flex justify-between text-muted"><span>Débito</span><span className="text-ink">{formatMXN(info.expectedDebit)}</span></div>
+              <div className="flex justify-between text-muted"><span>Crédito</span><span className="text-ink">{formatMXN(info.expectedCredit)}</span></div>
+              <div className="flex justify-between text-muted"><span>American Express</span><span className="text-ink">{formatMXN(info.expectedAmex)}</span></div>
+              {info.expectedCard > 0 && <div className="flex justify-between text-muted"><span>Tarjeta (histórico)</span><span className="text-ink">{formatMXN(info.expectedCard)}</span></div>}
               <div className="flex justify-between text-muted"><span>Transferencias</span><span className="text-ink">{formatMXN(info.expectedTransfer)}</span></div>
             </div>
 
@@ -90,9 +95,11 @@ export function CajaPanel({
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <div><label className={label}>Efectivo</label><input className={field} type="number" step="0.01" value={cash} onChange={(e) => setCash(e.target.value)} /></div>
-                  <div><label className={label}>Tarjeta</label><input className={field} type="number" step="0.01" value={card} onChange={(e) => setCard(e.target.value)} /></div>
+                  <div><label className={label}>Débito</label><input className={field} type="number" step="0.01" value={debit} onChange={(e) => setDebit(e.target.value)} /></div>
+                  <div><label className={label}>Crédito</label><input className={field} type="number" step="0.01" value={credit} onChange={(e) => setCredit(e.target.value)} /></div>
+                  <div><label className={label}>Amex</label><input className={field} type="number" step="0.01" value={amex} onChange={(e) => setAmex(e.target.value)} /></div>
                   <div><label className={label}>Transfer.</label><input className={field} type="number" step="0.01" value={transfer} onChange={(e) => setTransfer(e.target.value)} /></div>
                 </div>
                 <div><label className={label}>Cambiar cajero (opcional)</label>
