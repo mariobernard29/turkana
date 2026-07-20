@@ -29,6 +29,7 @@ export type ProductInput = {
   stone?: string | null;
   weight_grams?: number | null;
   category_id?: string | null;
+  collection_id?: string | null;
   tags: string[];
   seo_title?: string | null;
   seo_description?: string | null;
@@ -64,6 +65,7 @@ export async function saveProduct(
     stone: input.stone || null,
     weight_grams: input.weight_grams ?? null,
     category_id: input.category_id || null,
+    collection_id: input.collection_id || null,
     tags: input.tags ?? [],
     seo_title: input.seo_title || null,
     seo_description: input.seo_description || null,

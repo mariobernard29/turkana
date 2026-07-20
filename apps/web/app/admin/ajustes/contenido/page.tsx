@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
-import { getHomeContent, updateHeroImages } from "../content-actions";
+import { getHomeContent, updateHeroImages, getFeaturedCollectionContent } from "../content-actions";
 import { ImageListManager } from "@/components/admin/image-list-manager";
-import { BannerManager } from "@/components/admin/banner-manager";
+import { CollectionManager } from "@/components/admin/collection-manager";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Contenido — Turkana Admin" };
@@ -23,14 +23,17 @@ export default async function ContentSettingsPage() {
     );
   }
 
-  const { heroPaths, bannerSlides } = await getHomeContent();
+  const [{ heroPaths }, featuredCollection] = await Promise.all([
+    getHomeContent(),
+    getFeaturedCollectionContent(),
+  ]);
 
   return (
     <div className="space-y-6">
       <div>
         <BackLink />
         <h1 className="mt-2 text-3xl text-ink">Contenido de inicio</h1>
-        <p className="mt-1 text-sm text-muted">Administra el carrusel principal (hero) y los banners promocionales de la página de inicio.</p>
+        <p className="mt-1 text-sm text-muted">Administra el carrusel principal (hero) y la colección destacada de la página de inicio.</p>
       </div>
 
       <ImageListManager
@@ -41,7 +44,7 @@ export default async function ContentSettingsPage() {
         save={updateHeroImages}
       />
 
-      <BannerManager initialSlides={bannerSlides} />
+      <CollectionManager initial={featuredCollection} />
     </div>
   );
 }

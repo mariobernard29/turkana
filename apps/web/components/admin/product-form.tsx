@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { UploadCloud, X, Plus, Trash2, Loader2, Star, Eye, EyeOff, Package } from "lucide-react";
+import { UploadCloud, X, Plus, Trash2, Loader2, Star, Eye, EyeOff, Package, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { slugify } from "@/lib/slug";
 import { productImageUrl, cn } from "@/lib/utils";
@@ -35,6 +35,7 @@ export type ProductFormInitial = {
   stone: string | null;
   weight_grams: number | null;
   category_id: string | null;
+  collection_id: string | null;
   tags: string[];
   seo_title: string | null;
   seo_description: string | null;
@@ -55,9 +56,11 @@ export type ProductFormInitial = {
 export function ProductForm({
   initial,
   categories,
+  featuredCollection,
 }: {
   initial?: ProductFormInitial;
   categories: Option[];
+  featuredCollection?: Option | null;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -73,6 +76,7 @@ export function ProductForm({
   const [stone, setStone] = useState(initial?.stone ?? "");
   const [weight, setWeight] = useState(initial?.weight_grams?.toString() ?? "");
   const [categoryId, setCategoryId] = useState(initial?.category_id ?? "");
+  const [collectionId, setCollectionId] = useState(initial?.collection_id ?? "");
   const [tags, setTags] = useState(initial?.tags?.join(", ") ?? "");
   const [seoTitle, setSeoTitle] = useState(initial?.seo_title ?? "");
   const [seoDesc, setSeoDesc] = useState(initial?.seo_description ?? "");
@@ -170,6 +174,7 @@ export function ProductForm({
       stone: stone || null,
       weight_grams: weight ? Number(weight) : null,
       category_id: categoryId || null,
+      collection_id: collectionId || null,
       tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
       seo_title: seoTitle || null,
       seo_description: seoDesc || null,
@@ -418,6 +423,19 @@ export function ProductForm({
             <Star className="h-4 w-4" fill={isFeatured ? "currentColor" : "none"} />
             {isFeatured ? "Destacado" : "Marcar como destacado"}
           </button>
+          {featuredCollection && (
+            <button
+              type="button"
+              onClick={() => setCollectionId((v) => (v ? "" : featuredCollection.id))}
+              className={cn(
+                "flex w-full items-center justify-center gap-2 rounded-lg border py-2.5 text-sm transition-colors",
+                collectionId === featuredCollection.id ? "border-gold bg-gold/10 text-gold-dark" : "border-ink/15 text-muted",
+              )}
+            >
+              <Sparkles className="h-4 w-4" fill={collectionId === featuredCollection.id ? "currentColor" : "none"} />
+              {collectionId === featuredCollection.id ? `En ${featuredCollection.name}` : `Agregar a ${featuredCollection.name}`}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setHiddenOnline((v) => !v)}

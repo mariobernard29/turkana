@@ -31,14 +31,14 @@ export default function RewardsAccessPage() {
       const res = await loginRewards(email, password);
       setBusy(false);
       if (!res.ok) { setError(res.error ?? "Error"); return; }
-      router.push("/rewards");
+      router.push("/rewards/cuenta");
       router.refresh();
     } else {
       const res = await registerRewards({ fullName, email, phone, password });
       setBusy(false);
       if (!res.ok) { setError(res.error ?? "Error"); return; }
       if (res.needsConfirm) { setConfirmSent(true); return; }
-      router.push("/rewards");
+      router.push("/rewards/cuenta");
       router.refresh();
     }
   };

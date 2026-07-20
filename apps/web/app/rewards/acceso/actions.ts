@@ -33,7 +33,7 @@ export async function registerRewards(input: {
     password: input.password,
     options: {
       data: { full_name: input.fullName, phone: input.phone, rewards: "true" },
-      emailRedirectTo: `${site}/rewards`,
+      emailRedirectTo: `${site}/rewards/cuenta`,
     },
   });
   if (error) return { ok: false, error: error.message };

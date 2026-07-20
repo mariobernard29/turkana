@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Search } from "lucide-react";
+import { Search, User } from "lucide-react";
 import { AnnouncementBar } from "@/components/shop/announcement-bar";
 import { CartBadge } from "@/components/shop/cart-badge";
 
@@ -21,6 +21,9 @@ export function ShopHeader() {
             <Search className="h-5 w-5" strokeWidth={1.5} />
           </Link>
           <Link href="/rewards" className="transition-colors hover:text-ink md:hidden">Rewards</Link>
+          <Link href="/rewards/cuenta" aria-label="Mi cuenta" className="transition-colors hover:text-ink">
+            <User className="h-5 w-5" strokeWidth={1.5} />
+          </Link>
           <CartBadge />
         </div>
       </div>

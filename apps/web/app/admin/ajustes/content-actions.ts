@@ -42,6 +42,61 @@ export async function updateHeroImages(paths: string[]): Promise<{ ok: boolean; 
   return { ok: true };
 }
 
+export type CollectionContent = {
+  id: string;
+  slug: string;
+  name: string;
+  home_title: string | null;
+  home_subtitle: string | null;
+  home_image_url: string | null;
+  hero_image_url: string | null;
+};
+
+// Colección destacada de la home (por ahora solo administramos la primera colección activa).
+export async function getFeaturedCollectionContent(): Promise<CollectionContent | null> {
+  await requireStaff();
+  const db = createAdminClient();
+  const { data } = await db
+    .from("collections")
+    .select("id, slug, name, home_title, home_subtitle, home_image_url, hero_image_url")
+    .is("deleted_at", null)
+    .order("position")
+    .limit(1)
+    .maybeSingle();
+  return (data as unknown as CollectionContent | null) ?? null;
+}
+
+export async function updateFeaturedCollectionContent(input: {
+  id: string;
+  name: string;
+  home_title: string;
+  home_subtitle: string;
+  home_image_url: string | null;
+  hero_image_url: string | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  const g = await adminGuard();
+  if (!g.ok) return g;
+  if (!input.name?.trim()) return { ok: false, error: "El nombre es obligatorio" };
+  const db = createAdminClient();
+  const { data: current } = await db.from("collections").select("slug").eq("id", input.id).maybeSingle();
+  const { error } = await db
+    .from("collections")
+    .update({
+      name: input.name.trim(),
+      home_title: input.home_title.trim() || null,
+      home_subtitle: input.home_subtitle.trim() || null,
+      home_image_url: input.home_image_url || null,
+      hero_image_url: input.hero_image_url || null,
+    })
+    .eq("id", input.id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/");
+  revalidatePath("/admin/ajustes/contenido");
+  const slug = (current as unknown as { slug: string } | null)?.slug;
+  if (slug) revalidatePath(`/coleccion/${slug}`);
+  return { ok: true };
+}
+
 export async function updateBannerSlides(slides: BannerSlide[]): Promise<{ ok: boolean; error?: string }> {
   const g = await adminGuard();
   if (!g.ok) return g;

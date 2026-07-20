@@ -42,7 +42,8 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Proteger el panel de cliente Rewards → /rewards/acceso.
-  if (path.startsWith("/rewards") && !path.startsWith("/rewards/acceso") && !user) {
+  // (/rewards en sí es pública: página de marketing del programa.)
+  if (path.startsWith("/rewards/cuenta") && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/rewards/acceso";
     return NextResponse.redirect(url);

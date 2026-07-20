@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 async function loadData(id: string) {
   const db = createAdminClient();
-  const [prod, cat] = await Promise.all([
+  const [prod, cat, col] = await Promise.all([
     db
       .from("products")
       .select(
@@ -18,11 +18,13 @@ async function loadData(id: string) {
       .is("deleted_at", null)
       .maybeSingle(),
     db.from("categories").select("id, name").is("deleted_at", null).order("name"),
+    db.from("collections").select("id, name").is("deleted_at", null).order("position").limit(1).maybeSingle(),
   ]);
 
   return {
     product: prod.data as unknown as RawProduct | null,
     categories: (cat.data as unknown as { id: string; name: string }[]) ?? [],
+    featuredCollection: (col.data as unknown as { id: string; name: string } | null) ?? null,
   };
 }
 
@@ -37,6 +39,7 @@ type RawProduct = {
   stone: string | null;
   weight_grams: number | null;
   category_id: string | null;
+  collection_id: string | null;
   tags: string[] | null;
   seo_title: string | null;
   seo_description: string | null;
@@ -61,7 +64,7 @@ export default async function EditProductPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { product, categories } = await loadData(id);
+  const { product, categories, featuredCollection } = await loadData(id);
   if (!product) notFound();
 
   const initial: ProductFormInitial = {
@@ -75,6 +78,7 @@ export default async function EditProductPage({
     stone: product.stone,
     weight_grams: product.weight_grams,
     category_id: product.category_id,
+    collection_id: product.collection_id,
     tags: product.tags ?? [],
     seo_title: product.seo_title,
     seo_description: product.seo_description,
@@ -102,7 +106,7 @@ export default async function EditProductPage({
         <ChevronLeft className="h-4 w-4" /> Productos
       </Link>
       <h1 className="mb-8 text-3xl text-ink">{product.name}</h1>
-      <ProductForm initial={initial} categories={categories} />
+      <ProductForm initial={initial} categories={categories} featuredCollection={featuredCollection} />
     </div>
   );
 }

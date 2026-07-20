@@ -6,11 +6,11 @@ import { ShopHeader } from "@/components/shop/header";
 import { ShopFooter } from "@/components/shop/footer";
 import { ProductCard, type CatalogProduct } from "@/components/shop/product-card";
 import { HeroCarousel } from "@/components/shop/hero-carousel";
-import { BannerCarousel } from "@/components/shop/banner-carousel";
-import { RewardsSection } from "@/components/shop/rewards-section";
+import { FeaturedCollectionSection, type FeaturedCollection } from "@/components/shop/featured-collection-section";
 import { PiercingSection } from "@/components/shop/piercing-section";
 import { Reveal } from "@/components/shop/reveal";
-import { getHeroImages, getBannerSlides } from "@/lib/site-content";
+import { getHeroImages } from "@/lib/site-content";
+import { brandImageUrl } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -43,11 +43,62 @@ async function loadFeatured(): Promise<CatalogProduct[]> {
   }
 }
 
+async function loadFeaturedCollection(): Promise<{ collection: FeaturedCollection; products: CatalogProduct[] } | null> {
+  try {
+    const supabase = await createClient();
+    const { data: collectionRow } = await supabase
+      .from("collections")
+      .select("slug, name, home_title, home_subtitle, home_image_url")
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    type CollectionRow = { slug: string; name: string; home_title: string | null; home_subtitle: string | null; home_image_url: string | null };
+    const row = collectionRow as unknown as CollectionRow | null;
+    if (!row) return null;
+
+    const { data } = await supabase
+      .from("products")
+      .select("name, slug, material, product_variants(price_cents, is_active), product_images(storage_path, position), collections!inner(slug)")
+      .eq("status", "active")
+      .eq("hidden_online", false)
+      .is("deleted_at", null)
+      .eq("collections.slug", row.slug)
+      .order("created_at", { ascending: false })
+      .limit(4);
+    type R = { name: string; slug: string; material: string | null; product_variants: { price_cents: number; is_active: boolean }[]; product_images: { storage_path: string; position: number }[] };
+    const products = ((data as unknown as R[]) ?? [])
+      .map((p): CatalogProduct | null => {
+        const prices = (p.product_variants ?? []).filter((v) => v.is_active).map((v) => v.price_cents);
+        if (!prices.length) return null;
+        const image = [...(p.product_images ?? [])].sort((a, b) => a.position - b.position)[0];
+        return { slug: p.slug, name: p.name, material: p.material, minPriceCents: Math.min(...prices), multiplePrices: new Set(prices).size > 1, image: image?.storage_path ?? null };
+      })
+      .filter((p): p is CatalogProduct => p !== null);
+
+    if (products.length === 0) return null;
+
+    return {
+      collection: {
+        slug: row.slug,
+        title: row.home_title || row.name,
+        subtitle: row.home_subtitle,
+        imageUrl: row.home_image_url ? brandImageUrl(row.home_image_url) : null,
+      },
+      products,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default async function Home() {
-  const [featured, heroImages, bannerSlides] = await Promise.all([
+  const [featured, heroImages, featuredCollection] = await Promise.all([
     loadFeatured(),
     getHeroImages(),
-    getBannerSlides(),
+    loadFeaturedCollection(),
   ]);
 
   return (
@@ -109,15 +160,10 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* Banner promocional (administrable desde el admin) */}
-      {bannerSlides.length > 0 && (
-        <section className="w-full">
-          <BannerCarousel slides={bannerSlides} />
-        </section>
+      {/* Colección destacada (administrable desde el admin) */}
+      {featuredCollection && (
+        <FeaturedCollectionSection collection={featuredCollection.collection} products={featuredCollection.products} />
       )}
-
-      {/* Turkana Rewards */}
-      <RewardsSection />
 
       {/* Perforaciones */}
       <PiercingSection />

@@ -14,8 +14,15 @@ export function ShopFooter() {
         <div>
           <Image src="/turkana-logo.png" alt="Turkana Jewelry" width={150} height={43} className="h-9 w-auto" />
           <p className="mt-4 text-sm leading-relaxed text-muted">
-            Joyería de lujo en Los Mochis, Sinaloa. Piezas atemporales, hechas para perdurar.
+            Únete al Club <span className="text-gold">Turkana Rewards</span> y disfruta descuentos
+            exclusivos, acceso anticipado y sorpresas para miembros.
           </p>
+          <Link
+            href="/rewards"
+            className="mt-4 inline-block rounded-full border border-ink/20 px-5 py-2 text-xs uppercase tracking-widest text-ink transition-colors hover:border-gold hover:bg-gold hover:text-cream"
+          >
+            Únete al club
+          </Link>
         </div>
 
         <div>
