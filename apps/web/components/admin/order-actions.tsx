@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Mail, Check, Truck, PartyPopper } from "lucide-react";
-import { updateOrderStatus, sendOrderEmail, sendShippingGuide, sendDeliveredThankYou } from "@/app/admin/pedidos/actions";
+import { updateOrderStatus, sendOrderEmail, sendShippingGuide, sendDeliveredThankYou } from "@/app/admin/ventas/actions";
 import { CARRIERS, type EmailTemplate } from "@/lib/email";
 import { cn } from "@/lib/utils";
 
@@ -24,10 +24,14 @@ export function OrderActions({
   orderId,
   status,
   hasEmail,
+  isPos = false,
 }: {
   orderId: string;
   status: string;
   hasEmail: boolean;
+  // En ventas de tienda la cancelación va por "Administración de la venta", que
+  // además regresa el inventario y deshace el dinero.
+  isPos?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -83,7 +87,7 @@ export function OrderActions({
       <div>
         <p className="mb-2 text-xs uppercase tracking-wider text-muted">Cambiar estado</p>
         <div className="flex flex-wrap gap-2">
-          {STATUS_ACTIONS.map((a) => (
+          {STATUS_ACTIONS.filter((a) => !(isPos && a.status === "cancelled")).map((a) => (
             <button
               key={a.status}
               onClick={() => changeStatus(a.status)}

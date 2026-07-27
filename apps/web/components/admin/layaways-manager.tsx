@@ -3,16 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Check, X } from "lucide-react";
-import { addLayawayPayment, convertLayawayToSale, cancelLayaway } from "@/app/admin/clientes/actions";
+import { cancelLayaway } from "@/app/admin/clientes/actions";
 import { formatMXN, cn } from "@/lib/utils";
 
 export type LayawayRow = {
   id: string; customer: string; item: string; total: number; paid: number; dueDate: string | null; status: string;
 };
 
+// Consulta y cancelación. Los abonos y la entrega se cobran en el POS para que
+// el dinero caiga en un turno de caja.
 export function LayawaysManager({ rows, showCustomer = true }: { rows: LayawayRow[]; showCustomer?: boolean }) {
   const router = useRouter();
-  const [amount, setAmount] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ k: "ok" | "err"; t: string } | null>(null);
 
@@ -45,18 +46,10 @@ export function LayawaysManager({ rows, showCustomer = true }: { rows: LayawayRo
                 </p>
               </div>
               {active && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="number" min="1" placeholder="Abono $"
-                    value={amount[l.id] ?? ""} onChange={(e) => setAmount({ ...amount, [l.id]: e.target.value })}
-                    className="w-28 rounded-lg border border-ink/15 bg-white px-3 py-1.5 text-sm outline-none focus:border-gold"
-                  />
-                  <button disabled={busy === l.id || !amount[l.id]} onClick={() => run(l.id, () => addLayawayPayment(l.id, Number(amount[l.id])), "Abono registrado")}
-                    className="rounded-full bg-ink px-4 py-1.5 text-xs uppercase tracking-widest text-cream hover:bg-gold-dark disabled:opacity-40">Abonar</button>
-                  <button disabled={busy === l.id || pending > 0} title={pending > 0 ? "Aún hay saldo pendiente" : "Convertir en venta"}
-                    onClick={() => run(l.id, () => convertLayawayToSale(l.id), "Apartado convertido en venta")}
-                    className="rounded-full border border-gold/40 bg-gold/5 px-4 py-1.5 text-xs text-gold-dark hover:bg-gold/10 disabled:opacity-40">Entregar</button>
-                  <button disabled={busy === l.id} onClick={() => { if (confirm("¿Cancelar apartado?")) run(l.id, () => cancelLayaway(l.id), "Apartado cancelado"); }}
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-xs text-muted">Abonos y entrega en el POS</span>
+                  <button disabled={busy === l.id} title="Cancelar apartado y liberar las piezas"
+                    onClick={() => { if (confirm("¿Cancelar apartado? Se liberan las piezas reservadas.")) run(l.id, () => cancelLayaway(l.id), "Apartado cancelado"); }}
                     className="text-muted hover:text-red-600"><X className="h-4 w-4" /></button>
                 </div>
               )}

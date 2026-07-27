@@ -1,5 +1,7 @@
 // Alertas al correo de administración: ventas en línea, corte de caja e inventario bajo.
 import { createAdminClient } from "@/lib/supabase/admin";
+import { CASH_NEGATIVE_TYPES, countedPairs, expectedPairs, movementLabel, summaryPairs } from "@/lib/cash";
+import type { CashCutReport } from "@/lib/cash-report";
 
 const money = (c: number) => `$${(c / 100).toFixed(2)}`;
 
@@ -125,72 +127,60 @@ export async function notifyOrderPaid(orderId: string) {
 }
 
 // ── Corte de caja ──────────────────────────────────────────────────────────────
-export type CashCutPayload = {
-  sessionId: string;
-  cashier: string; registerName: string; openedAt: string; closedAt: string;
-  openingFloat: number; salesCount: number; discountsCents: number; refundsCents: number;
-  dropsCents: number; precutsCents: number; peopleServed: number;
-  expectedCash: number; expectedDebit: number; expectedCredit: number; expectedAmex: number; expectedTransfer: number;
-  countedCash: number; countedDebit: number; countedCredit: number; countedAmex: number; countedTransfer: number; difference: number;
-  lote: string;
+// Las etiquetas y el orden salen de lib/cash.ts, los mismos que el ticket impreso.
+const KIND_SUFFIX: Record<string, string> = {
+  credit: " · fiado",
+  layaway: " · apartado liquidado",
+  sale: "",
 };
 
-export async function notifyCashCut(p: CashCutPayload) {
+export async function notifyCashCut(r: CashCutReport) {
   const { email } = await getAlertConfig();
   if (!email) return;
-  const db = createAdminClient();
 
-  // Ventas del lote (cada cuenta con sus piezas y total).
-  const { data: ords } = await db
-    .from("orders")
-    .select("order_number, total_cents, order_items(name, quantity, total_cents)")
-    .eq("cash_session_id", p.sessionId)
-    .order("created_at", { ascending: true });
-  const orders = (ords as unknown as { order_number: string; total_cents: number; order_items: { name: string; quantity: number; total_cents: number }[] }[]) ?? [];
-
-  const salesHtml = orders.length === 0
+  const salesHtml = r.sales.length === 0
     ? `<p style="font-size:13px;color:#999;margin:0">Sin ventas registradas en el lote.</p>`
-    : orders.map((o) => `
+    : r.sales.map((s) => `
         <div style="border:1px solid #eee;border-radius:8px;padding:10px 12px;margin:0 0 8px">
-          <p style="margin:0 0 6px;font-size:13px"><strong>Cuenta ${o.order_number}</strong></p>
+          <p style="margin:0 0 6px;font-size:13px"><strong>Cuenta ${s.orderNumber}</strong>${KIND_SUFFIX[s.kind] ?? ""}${s.cancelled ? ` <span style="color:#dc2626">· CANCELADA</span>` : ""}</p>
           <table style="width:100%;border-collapse:collapse;font-size:12px">
-            ${(o.order_items ?? []).map((it) => `<tr><td style="padding:2px 0;color:#555">${it.quantity}× ${it.name}</td><td style="padding:2px 0;text-align:right">${money(it.total_cents)}</td></tr>`).join("")}
-            <tr><td style="padding:5px 0 0;font-weight:bold;border-top:1px solid #eee">Total</td><td style="padding:5px 0 0;text-align:right;font-weight:bold;border-top:1px solid #eee">${money(o.total_cents)}</td></tr>
+            ${s.items.map((it) => `<tr><td style="padding:2px 0;color:#555">${it.quantity}× ${it.name}</td><td style="padding:2px 0;text-align:right">${money(it.total_cents)}</td></tr>`).join("")}
+            <tr><td style="padding:5px 0 0;font-weight:bold;border-top:1px solid #eee">Total</td><td style="padding:5px 0 0;text-align:right;font-weight:bold;border-top:1px solid #eee">${money(s.totalCents)}</td></tr>
           </table>
         </div>`).join("");
 
-  const diffColor = p.difference === 0 ? "#16a34a" : p.difference > 0 ? "#2563eb" : "#dc2626";
-  const inner = `
-    <p style="margin:0 0 4px;font-size:13px"><strong>Caja:</strong> ${p.registerName} · <strong>Cajero:</strong> ${p.cashier}</p>
-    <p style="margin:0 0 4px;font-size:13px"><strong>Lote:</strong> ${p.lote} · <strong>Personas atendidas:</strong> ${p.peopleServed}</p>
-    <p style="margin:0 0 16px;font-size:13px"><strong>Apertura:</strong> ${new Date(p.openedAt).toLocaleString("es-MX")} · <strong>Cierre:</strong> ${new Date(p.closedAt).toLocaleString("es-MX")}</p>
+  const movs = r.movements.filter((m) => m.type !== "sale");
+  const movsHtml = movs.length === 0
+    ? `<p style="font-size:13px;color:#999;margin:0">Sin movimientos de caja.</p>`
+    : `<table style="width:100%;border-collapse:collapse;font-size:13px">${movs.map((m) => row(
+        movementLabel(m.type, m.method) + (m.notes ? ` <span style="color:#999">· ${m.notes}</span>` : ""),
+        (CASH_NEGATIVE_TYPES.includes(m.type) ? "−" : "") + money(m.amountCents),
+      )).join("")}</table>`;
 
-    <p style="margin:0 0 8px;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#a08c6b">Ventas del lote (${orders.length})</p>
+  const diffColor = r.difference === 0 ? "#16a34a" : r.difference > 0 ? "#2563eb" : "#dc2626";
+  const head = (t: string) => `<p style="margin:16px 0 8px;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#a08c6b">${t}</p>`;
+  const inner = `
+    <p style="margin:0 0 4px;font-size:13px"><strong>Caja:</strong> ${r.registerName} · <strong>Cajero:</strong> ${r.cashier}</p>
+    <p style="margin:0 0 4px;font-size:13px"><strong>Lote:</strong> ${r.lote} · <strong>Personas atendidas:</strong> ${r.peopleServed}</p>
+    <p style="margin:0 0 16px;font-size:13px"><strong>Apertura:</strong> ${new Date(r.openedAt).toLocaleString("es-MX")} · <strong>Cierre:</strong> ${r.closedAt ? new Date(r.closedAt).toLocaleString("es-MX") : "—"}</p>
+
+    ${head(`Ventas del lote (${r.sales.length})`)}
     ${salesHtml}
 
-    <p style="margin:16px 0 8px;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#a08c6b">Resumen de caja</p>
+    ${head("Movimientos de caja")}
+    ${movsHtml}
+
+    ${head("Resumen del turno")}
     <table style="width:100%;border-collapse:collapse;font-size:13px">
-      ${row("Fondo inicial", money(p.openingFloat))}
-      ${row("Ventas", String(p.salesCount))}
-      ${row("Descuentos otorgados", "−" + money(p.discountsCents))}
-      ${row("Reembolsos / cambios", "−" + money(p.refundsCents))}
-      ${row("Resguardos", "−" + money(p.dropsCents))}
-      ${p.precutsCents > 0 ? row("Precortes", money(p.precutsCents)) : ""}
+      ${row("Ventas", String(r.sales.length))}
+      ${summaryPairs(r.totals).map((p) => row(p.label, (p.negative ? "−" : "") + money(p.cents))).join("")}
       <tr><td colspan="2" style="padding:8px 0 2px;font-weight:bold">Esperado</td></tr>
-      ${row("Efectivo esperado", money(p.expectedCash))}
-      ${row("Débito esperado", money(p.expectedDebit))}
-      ${row("Crédito esperado", money(p.expectedCredit))}
-      ${row("Amex esperado", money(p.expectedAmex))}
-      ${row("Transferencia esperada", money(p.expectedTransfer))}
+      ${expectedPairs(r.totals).map((p) => row(p.label, money(p.cents))).join("")}
       <tr><td colspan="2" style="padding:8px 0 2px;font-weight:bold">Contado</td></tr>
-      ${row("Efectivo contado", money(p.countedCash))}
-      ${row("Débito contado", money(p.countedDebit))}
-      ${row("Crédito contado", money(p.countedCredit))}
-      ${row("Amex contado", money(p.countedAmex))}
-      ${row("Transferencia contada", money(p.countedTransfer))}
+      ${countedPairs(r.counted).map((p) => row(p.label, money(p.cents))).join("")}
     </table>
-    <p style="margin:14px 0 0;font-size:15px;text-align:right"><strong>Diferencia: <span style="color:${diffColor}">${p.difference >= 0 ? "+" : ""}${money(p.difference)}</span></strong></p>`;
-  await send(email, `🧾 Corte de caja — ${p.registerName} (${p.difference === 0 ? "cuadró" : "dif. " + money(p.difference)})`, "Corte de caja", inner);
+    <p style="margin:14px 0 0;font-size:15px;text-align:right"><strong>Diferencia: <span style="color:${diffColor}">${r.difference >= 0 ? "+" : ""}${money(r.difference)}</span></strong></p>`;
+  await send(email, `🧾 Corte de caja — ${r.registerName} (${r.difference === 0 ? "cuadró" : "dif. " + money(r.difference)})`, "Corte de caja", inner);
 }
 
 // ── Inventario bajo ─────────────────────────────────────────────────────────────

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Check, Printer, Usb } from "lucide-react";
+import { Check, Printer } from "lucide-react";
 import type { SaleResult } from "@/app/pos/actions";
 import { formatMXN } from "@/lib/utils";
-import { printReceiptHTML, printEscPosUSB } from "@/lib/print";
+import { printReceiptHTML } from "@/lib/print";
+import type { ReceiptData } from "@/lib/escpos";
 import { methodLabel } from "@/lib/payments";
 
 export function TicketModal({
@@ -14,17 +14,12 @@ export function TicketModal({
   ticket: NonNullable<SaleResult["ticket"]>;
   onClose: () => void;
 }) {
-  const [printErr, setPrintErr] = useState<string | null>(null);
-  const receipt = {
+  const receipt: ReceiptData = {
+    docType: "sale",
     orderNumber: ticket.orderNumber,
     items: ticket.items.map((it) => ({ name: it.name, quantity: it.quantity, total_cents: it.total_cents })),
     subtotal: ticket.subtotal, tax: ticket.tax, total: ticket.total, discountCents: ticket.discountCents, payments: ticket.payments,
   };
-  const printUsb = async () => {
-    setPrintErr(null);
-    try { await printEscPosUSB(receipt); } catch (e) { setPrintErr(String((e as Error).message ?? e)); }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
       <div className="w-full max-w-xs rounded-2xl bg-white p-6">
@@ -57,23 +52,12 @@ export function TicketModal({
           ))}
         </div>
 
-        {printErr && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{printErr}</p>}
-
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <button
-            onClick={() => printReceiptHTML(receipt)}
-            className="flex items-center justify-center gap-2 rounded-full border border-ink/15 py-3 text-sm text-ink hover:border-gold"
-          >
-            <Printer className="h-4 w-4" /> Imprimir
-          </button>
-          <button
-            onClick={printUsb}
-            className="flex items-center justify-center gap-2 rounded-full border border-ink/15 py-3 text-sm text-ink hover:border-gold"
-            title="Impresora térmica USB (ESC/POS)"
-          >
-            <Usb className="h-4 w-4" /> ESC/POS
-          </button>
-        </div>
+        <button
+          onClick={() => printReceiptHTML(receipt)}
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-ink/15 py-3 text-sm text-ink hover:border-gold"
+        >
+          <Printer className="h-4 w-4" /> Imprimir ticket
+        </button>
         <button
           onClick={onClose}
           className="mt-2 w-full rounded-full bg-ink py-3 text-sm uppercase tracking-widest text-cream hover:bg-gold-dark"

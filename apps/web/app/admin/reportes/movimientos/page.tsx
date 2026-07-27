@@ -2,23 +2,26 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatMXN } from "@/lib/utils";
-import { methodLabel, POS_METHODS } from "@/lib/payments";
+import { methodLabel, MOVEMENT_METHODS } from "@/lib/payments";
+import { CASH_TYPE_LABEL, CASH_NEGATIVE_TYPES } from "@/lib/cash";
 
 export const dynamic = "force-dynamic";
 
-const TYPE_LABEL: Record<string, string> = {
-  sale: "Venta", refund: "Reembolso / cambio", in: "Entrada", out: "Salida",
-  drop: "Resguardo", expense: "Gasto", precut: "Precorte",
+// A qué apunta reference_id (los abonos ya no son "entradas" anónimas).
+const REF_LABEL: Record<string, string> = {
+  order: "Venta", layaway: "Apartado", credit: "Crédito", other: "Otro",
 };
-const NEG = ["refund", "out", "drop", "expense"];
 
 type Filters = { tipo?: string; metodo?: string; desde?: string; hasta?: string };
-type Row = { id: string; type: string; method: string | null; amount_cents: number; notes: string | null; created_at: string };
+type Row = {
+  id: string; type: string; method: string | null; amount_cents: number;
+  notes: string | null; created_at: string; reference_type: string | null;
+};
 
 async function load(f: Filters): Promise<Row[]> {
   try {
     const db = createAdminClient();
-    let q = db.from("cash_movements").select("id, type, method, amount_cents, notes, created_at").order("created_at", { ascending: false }).limit(500);
+    let q = db.from("cash_movements").select("id, type, method, amount_cents, notes, created_at, reference_type").order("created_at", { ascending: false }).limit(500);
     if (f.tipo) q = q.eq("type", f.tipo);
     if (f.metodo) q = q.eq("method", f.metodo);
     if (f.desde) q = q.gte("created_at", `${f.desde}T00:00:00`);
@@ -48,14 +51,14 @@ export default async function MovementsPage({ searchParams }: { searchParams: Pr
           <label className="mb-1 block text-xs uppercase tracking-wider text-muted">Tipo</label>
           <select name="tipo" defaultValue={f.tipo ?? ""} className={inputCls}>
             <option value="">Todos</option>
-            {Object.entries(TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            {Object.entries(CASH_TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </div>
         <div>
           <label className="mb-1 block text-xs uppercase tracking-wider text-muted">Método</label>
           <select name="metodo" defaultValue={f.metodo ?? ""} className={inputCls}>
             <option value="">Todos</option>
-            {POS_METHODS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+            {MOVEMENT_METHODS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
           </select>
         </div>
         <div>
@@ -77,20 +80,22 @@ export default async function MovementsPage({ searchParams }: { searchParams: Pr
               <th className="px-6 py-3 font-medium">Fecha</th>
               <th className="px-6 py-3 font-medium">Tipo</th>
               <th className="px-6 py-3 font-medium">Método</th>
+              <th className="px-6 py-3 font-medium">Origen</th>
               <th className="px-6 py-3 font-medium">Notas</th>
               <th className="px-6 py-3 text-right font-medium">Monto</th>
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && <tr><td colSpan={5} className="px-6 py-12 text-center text-muted">Sin movimientos</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={6} className="px-6 py-12 text-center text-muted">Sin movimientos</td></tr>}
             {rows.map((m) => (
               <tr key={m.id} className="border-b border-ink/5 last:border-0">
                 <td className="px-6 py-3 text-muted">{new Date(m.created_at).toLocaleString("es-MX")}</td>
-                <td className="px-6 py-3 text-ink">{TYPE_LABEL[m.type] ?? m.type}</td>
+                <td className="px-6 py-3 text-ink">{CASH_TYPE_LABEL[m.type] ?? m.type}</td>
                 <td className="px-6 py-3 text-muted">{m.method ? methodLabel(m.method) : "—"}</td>
+                <td className="px-6 py-3 text-muted">{m.reference_type ? REF_LABEL[m.reference_type] ?? m.reference_type : "—"}</td>
                 <td className="px-6 py-3 text-muted">{m.notes ?? ""}</td>
-                <td className={`px-6 py-3 text-right tabular-nums ${NEG.includes(m.type) ? "text-red-600" : "text-ink"}`}>
-                  {NEG.includes(m.type) ? "−" : "+"}{formatMXN(m.amount_cents)}
+                <td className={`px-6 py-3 text-right tabular-nums ${CASH_NEGATIVE_TYPES.includes(m.type) ? "text-red-600" : "text-ink"}`}>
+                  {CASH_NEGATIVE_TYPES.includes(m.type) ? "−" : "+"}{formatMXN(m.amount_cents)}
                 </td>
               </tr>
             ))}

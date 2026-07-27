@@ -55,3 +55,11 @@ export const POS_METHODS: { key: string; label: string }[] = [
   { key: "amex", label: "American Express" },
   { key: "transfer", label: "Transferencia" },
 ];
+
+// Los movimientos de caja además pueden traer fiado y apartado, que NO son dinero
+// del turno (el fiado se cobra después; el apartado ya entró como abono).
+export const MOVEMENT_METHODS: { key: string; label: string }[] = [
+  ...POS_METHODS,
+  { key: "credit", label: "Crédito (cuenta)" },
+  { key: "layaway", label: "Apartado" },
+];

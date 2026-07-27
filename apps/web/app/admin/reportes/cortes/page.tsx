@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatMXN } from "@/lib/utils";
+import { CutPrintButton } from "@/components/admin/cut-print-button";
 
 export const dynamic = "force-dynamic";
 
@@ -93,11 +94,14 @@ export default async function CortesPage({ searchParams }: { searchParams: Promi
                   <p className="text-ink">{reg(s.cash_registers)} · <span className="text-muted">Cajero: {names[s.cashier_id] ?? "—"}</span></p>
                   <p className="text-xs text-muted">Lote {s.id.slice(0, 8)} · {s.closed_at ? new Date(s.closed_at).toLocaleString("es-MX") : ""}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs uppercase tracking-wider text-muted">Diferencia</p>
-                  <p className={`text-xl font-semibold tabular-nums ${diff === 0 ? "text-green-600" : diff > 0 ? "text-blue-600" : "text-red-600"}`}>
-                    {diff >= 0 ? "+" : ""}{formatMXN(diff)}
-                  </p>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <p className="text-xs uppercase tracking-wider text-muted">Diferencia</p>
+                    <p className={`text-xl font-semibold tabular-nums ${diff === 0 ? "text-green-600" : diff > 0 ? "text-blue-600" : "text-red-600"}`}>
+                      {diff >= 0 ? "+" : ""}{formatMXN(diff)}
+                    </p>
+                  </div>
+                  <CutPrintButton sessionId={s.id} />
                 </div>
               </div>
               <div className="mt-4 grid gap-x-8 gap-y-1 text-sm sm:grid-cols-2 lg:grid-cols-4">

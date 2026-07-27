@@ -2,15 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, Printer } from "lucide-react";
 import { getSessionTotals, closeSession } from "@/app/pos/actions";
+import { printReceiptHTML } from "@/lib/print";
+import type { ReceiptData } from "@/lib/escpos";
 import { formatMXN, cn } from "@/lib/utils";
-
-type Totals = {
-  openingFloat: number; expectedCash: number; expectedTransfer: number; salesCount: number;
-  expectedDebit: number; expectedCredit: number; expectedAmex: number; expectedCard: number;
-  refundsCents: number; dropsCents: number; discountsCents: number; precutsCents: number;
-};
+import { expectedPairs, summaryPairs, type CashTotals } from "@/lib/cash";
 
 export function PosClose({
   sessionId,
@@ -20,7 +17,7 @@ export function PosClose({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const [totals, setTotals] = useState<Totals | null>(null);
+  const [totals, setTotals] = useState<CashTotals | null>(null);
   const [cash, setCash] = useState("");
   const [debit, setDebit] = useState("");
   const [credit, setCredit] = useState("");
@@ -30,9 +27,10 @@ export function PosClose({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ expectedCash: number; countedCash: number; difference: number } | null>(null);
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
 
   useEffect(() => {
-    getSessionTotals(sessionId).then((t) => setTotals(t as Totals));
+    getSessionTotals(sessionId).then(setTotals);
   }, [sessionId]);
 
   const submit = async (e: React.FormEvent) => {
@@ -51,6 +49,7 @@ export function PosClose({
     setBusy(false);
     if (!res.ok) { setError(res.error ?? "Error"); return; }
     setDone(res.summary ?? null);
+    setReceipt(res.receipt ?? null);
   };
 
   const field = "w-full rounded-xl border border-ink/15 bg-white px-4 py-3 text-lg outline-none focus:border-gold";
@@ -76,28 +75,39 @@ export function PosClose({
             <p className={cn("font-serif text-3xl", done.difference === 0 ? "text-green-600" : done.difference > 0 ? "text-blue-600" : "text-red-600")}>
               {done.difference >= 0 ? "+" : ""}{formatMXN(done.difference)}
             </p>
+            {receipt && (
+              <button
+                onClick={() => printReceiptHTML(receipt)}
+                className="mt-8 flex w-full items-center justify-center gap-2 rounded-full border border-ink/15 py-3 text-sm text-ink hover:border-gold"
+              >
+                <Printer className="h-4 w-4" /> Imprimir corte
+              </button>
+            )}
             <button
               onClick={() => { router.refresh(); }}
-              className="mt-8 w-full rounded-full bg-ink py-3.5 text-sm uppercase tracking-widest text-cream hover:bg-gold-dark"
+              className="mt-2 w-full rounded-full bg-ink py-3.5 text-sm uppercase tracking-widest text-cream hover:bg-gold-dark"
             >
               Cerrar turno
             </button>
           </div>
         ) : (
           <form onSubmit={submit}>
+            {/* Mismas etiquetas y orden que el ticket de corte y el correo (lib/cash.ts). */}
             <div className="mb-5 space-y-1 rounded-xl bg-cream p-4 text-sm">
-              <div className="flex justify-between text-muted"><span>Fondo inicial</span><span>{formatMXN(totals.openingFloat)}</span></div>
-              <div className="flex justify-between text-muted"><span>Ventas</span><span>{totals.salesCount}</span></div>
-              {totals.discountsCents > 0 && <div className="flex justify-between text-muted"><span>Descuentos otorgados</span><span className="text-gold">−{formatMXN(totals.discountsCents)}</span></div>}
-              {totals.refundsCents > 0 && <div className="flex justify-between text-muted"><span>Reembolsos / cambios</span><span className="text-red-600">−{formatMXN(totals.refundsCents)}</span></div>}
-              {totals.dropsCents > 0 && <div className="flex justify-between text-muted"><span>Resguardos</span><span>−{formatMXN(totals.dropsCents)}</span></div>}
-              {totals.precutsCents > 0 && <div className="flex justify-between text-muted"><span>Precortes</span><span>{formatMXN(totals.precutsCents)}</span></div>}
-              <div className="mt-1 flex justify-between border-t border-ink/10 pt-1 text-muted"><span>Efectivo esperado</span><span className="text-ink">{formatMXN(totals.expectedCash)}</span></div>
-              <div className="flex justify-between text-muted"><span>Débito esperado</span><span className="text-ink">{formatMXN(totals.expectedDebit)}</span></div>
-              <div className="flex justify-between text-muted"><span>Crédito esperado</span><span className="text-ink">{formatMXN(totals.expectedCredit)}</span></div>
-              <div className="flex justify-between text-muted"><span>Amex esperado</span><span className="text-ink">{formatMXN(totals.expectedAmex)}</span></div>
-              {totals.expectedCard > 0 && <div className="flex justify-between text-muted"><span>Tarjeta (histórico)</span><span className="text-ink">{formatMXN(totals.expectedCard)}</span></div>}
-              <div className="flex justify-between text-muted"><span>Transferencia esperada</span><span className="text-ink">{formatMXN(totals.expectedTransfer)}</span></div>
+              {/* Cuenta movimientos de cobro, no cuentas: una venta dividida suma varios. */}
+              <div className="flex justify-between text-muted"><span>Cobros registrados</span><span>{totals.salesCount}</span></div>
+              {summaryPairs(totals).map((p) => (
+                <div key={p.label} className="flex justify-between text-muted">
+                  <span>{p.label}</span>
+                  <span className={p.negative ? "text-gold" : ""}>{p.negative ? "−" : ""}{formatMXN(p.cents)}</span>
+                </div>
+              ))}
+              <div className="mt-1 border-t border-ink/10 pt-1" />
+              {expectedPairs(totals).map((p) => (
+                <div key={p.label} className="flex justify-between text-muted">
+                  <span>{p.label}</span><span className="text-ink">{formatMXN(p.cents)}</span>
+                </div>
+              ))}
             </div>
 
             <div className="space-y-4">

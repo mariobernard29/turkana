@@ -19,7 +19,7 @@ const NAV = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/productos", label: "Productos", icon: Gem },
   { href: "/admin/inventario", label: "Inventario", icon: Package },
-  { href: "/admin/pedidos", label: "Pedidos", icon: ShoppingBag },
+  { href: "/admin/ventas", label: "Ventas", icon: ShoppingBag },
   { href: "/admin/clientes", label: "Clientes", icon: Users },
   { href: "/admin/rewards", label: "Rewards", icon: Ticket },
   { href: "/pos", label: "Punto de venta", icon: Wallet },

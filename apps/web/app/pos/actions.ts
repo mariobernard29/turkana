@@ -6,6 +6,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { checkLowStockAfterSale, notifyCashCut } from "@/lib/admin-alerts";
 import type { PaymentMethod } from "@/lib/payments";
 import { CARD_METHODS } from "@/lib/payments";
+import type { CashTotals } from "@/lib/cash";
+import { loadCashCutReport, loadSessionTotals } from "@/lib/cash-report";
+import { buildCashCutReceipt } from "@/lib/cash-receipt";
+import { buildLineItems } from "@/lib/sale-items";
+import type { ReceiptData } from "@/lib/escpos";
 
 type DB = ReturnType<typeof createAdminClient>;
 const TAX_RATE = 0.16;
@@ -52,6 +57,8 @@ export type SaleResult = {
 
 export type PaymentSplit = { method: PaymentMethod; amountCents: number };
 export type DiscountInput = { cents: number; authorizedBy?: string; concept?: string };
+// Datos del fiado (método de pago 'credit'): la pieza se entrega y queda el saldo.
+export type CreditInput = { dueDate?: string; authorizedBy?: string; notes?: string };
 
 type ServiceInput = { concept: string; description?: string; amountCents: number };
 type SaleInput = {
@@ -59,9 +66,38 @@ type SaleInput = {
   items: { variantId: string; qty: number }[];
   services?: ServiceInput[];
   payments: PaymentSplit[];
-  customerId?: string; // cliente Rewards registrado (acumula y puede canjear)
+  customerId?: string; // cliente de la venta (requerido para Rewards y fiado)
   discount?: DiscountInput;
+  credit?: CreditInput;
 };
+
+const DEFAULT_CREDIT_LIMIT = 500000; // $5,000 si no hay ajuste configurado
+
+// Cuenta de crédito del cliente: se toma la activa más reciente o se crea.
+async function resolveCreditAccount(
+  db: DB,
+  customerId: string,
+): Promise<{ ok: true; id: string; limitCents: number; balanceCents: number } | { ok: false; error: string }> {
+  const { data } = await db
+    .from("credit_accounts")
+    .select("id, limit_cents, balance_cents, status")
+    .eq("customer_id", customerId)
+    .order("created_at", { ascending: false });
+  const accounts = (data as unknown as { id: string; limit_cents: number; balance_cents: number; status: string }[]) ?? [];
+
+  const active = accounts.find((a) => a.status === "active");
+  if (active) return { ok: true, id: active.id, limitCents: active.limit_cents, balanceCents: active.balance_cents };
+  if (accounts.length) return { ok: false, error: "La cuenta de crédito del cliente está suspendida" };
+
+  const { data: setting } = await db.from("app_settings").select("value").eq("key", "credit_default_limit_cents").maybeSingle();
+  const limitCents = Number((setting as { value: string } | null)?.value ?? DEFAULT_CREDIT_LIMIT) || DEFAULT_CREDIT_LIMIT;
+  const { data: created, error } = await db
+    .from("credit_accounts")
+    .insert({ customer_id: customerId, limit_cents: limitCents, balance_cents: 0, status: "active" })
+    .select("id").single();
+  if (error || !created) return { ok: false, error: error?.message ?? "No se pudo abrir la cuenta de crédito" };
+  return { ok: true, id: (created as { id: string }).id, limitCents, balanceCents: 0 };
+}
 
 // Lógica de venta reutilizable (POS online y sincronización offline).
 async function applySale(
@@ -75,18 +111,9 @@ async function applySale(
 
   const ids = input.items.map((i) => i.variantId);
 
-  const { data: vData } = await db
-    .from("product_variants")
-    .select("id, sku, price_cents, attributes, products(name, track_inventory)")
-    .in("id", ids);
-  const vmap = new Map(
-    ((vData as unknown as { id: string; sku: string; price_cents: number; attributes: Record<string, string> | null; products: { name: string; track_inventory?: boolean } | { name: string; track_inventory?: boolean }[] | null }[]) ?? [])
-      .map((v) => [v.id, v]),
-  );
-  const tracksInventory = (v: { products: { track_inventory?: boolean } | { track_inventory?: boolean }[] | null }) => {
-    const p = Array.isArray(v.products) ? v.products[0] : v.products;
-    return p?.track_inventory !== false;
-  };
+  const built = await buildLineItems(db, input.items);
+  if (!built.ok) return { ok: false, error: built.error };
+  const tracked = new Map(built.lines.map((l) => [l.variantId, l.tracksInventory]));
 
   // Stock de tienda (validación previa).
   const { data: loc } = await db
@@ -104,18 +131,12 @@ async function applySale(
   let goods = 0; // importe con IVA incluido
   const orderItems: Record<string, unknown>[] = [];
   const ticketItems: NonNullable<SaleResult["ticket"]>["items"] = [];
-  for (const it of input.items) {
-    const v = vmap.get(it.variantId);
-    if (!v) return { ok: false, error: "Producto no encontrado" };
-    if (tracksInventory(v) && (smap.get(it.variantId) ?? 0) < it.qty)
-      return { ok: false, conflict: true, error: `Sin stock suficiente para ${v.sku}` };
-    const prod = Array.isArray(v.products) ? v.products[0] : v.products;
-    const talla = v.attributes?.talla;
-    const name = `${prod?.name ?? v.sku}${talla ? ` · Talla ${talla}` : ""}`;
-    const lineTotal = v.price_cents * it.qty;
-    goods += lineTotal;
-    orderItems.push({ variant_id: v.id, sku: v.sku, name, unit_price_cents: v.price_cents, quantity: it.qty, total_cents: lineTotal });
-    ticketItems.push({ name, sku: v.sku, quantity: it.qty, total_cents: lineTotal });
+  for (const l of built.lines) {
+    if (l.tracksInventory && (smap.get(l.variantId) ?? 0) < l.quantity)
+      return { ok: false, conflict: true, error: `Sin stock suficiente para ${l.sku}` };
+    goods += l.totalCents;
+    orderItems.push({ variant_id: l.variantId, sku: l.sku, name: l.name, unit_price_cents: l.unitPriceCents, quantity: l.quantity, total_cents: l.totalCents });
+    ticketItems.push({ name: l.name, sku: l.sku, quantity: l.quantity, total_cents: l.totalCents });
   }
 
   // Servicios (sin inventario).
@@ -150,6 +171,24 @@ async function applySale(
     if (rewardsTotal > cap) return { ok: false, error: `Máximo ${(cap / 100).toFixed(0)} en Rewards por compra` };
     const { data: rw } = await db.from("customer_rewards").select("balance_cents").eq("customer_id", customerId).maybeSingle();
     if (((rw as { balance_cents: number } | null)?.balance_cents ?? 0) < rewardsTotal) return { ok: false, error: "Saldo de Rewards insuficiente" };
+  }
+
+  // Validar el fiado (cliente, cuenta y límite) ANTES de crear la orden.
+  const creditTotal = payments.filter((p) => p.method === "credit").reduce((s, p) => s + p.amountCents, 0);
+  let creditAccountId: string | null = null;
+  const forceCredit = Boolean(input.credit?.authorizedBy?.trim());
+  if (creditTotal > 0) {
+    if (!customerId) return { ok: false, error: "El fiado requiere un cliente" };
+    const acc = await resolveCreditAccount(db, customerId);
+    if (!acc.ok) return { ok: false, error: acc.error };
+    const available = acc.limitCents - acc.balanceCents;
+    if (creditTotal > available && !forceCredit) {
+      return {
+        ok: false,
+        error: `Excede el límite de crédito · disponible ${(available / 100).toFixed(2)} — requiere autorización`,
+      };
+    }
+    creditAccountId = acc.id;
   }
 
   // Orden POS completada.
@@ -187,15 +226,34 @@ async function applySale(
     })));
   }
 
+  // Cargo a la cuenta de crédito (sube el saldo del cliente y liga el cargo a la orden).
+  if (creditTotal > 0 && creditAccountId) {
+    const { error } = await db.rpc("charge_credit", {
+      p_account: creditAccountId, p_order: order.id, p_amount: creditTotal,
+      p_due: input.credit?.dueDate || null, p_session: input.sessionId,
+      p_by: staffId, p_force: forceCredit, p_notes: input.credit?.notes || null,
+    });
+    if (error) {
+      await db.from("orders").delete().eq("id", order.id);
+      return { ok: false, error: `Crédito: ${error.message}` };
+    }
+    if (forceCredit) {
+      await db.from("audit_logs").insert({
+        actor_id: staffId, action: "credit.limit_override", entity_type: "credit_accounts", entity_id: creditAccountId,
+        after: { order_id: order.id, amount_cents: creditTotal, authorized_by: input.credit?.authorizedBy ?? null },
+      });
+    }
+  }
+
   // Descuento de stock tienda. Si falla, revertir la orden para no dejar huérfanas.
   for (const it of input.items) {
-    const v = vmap.get(it.variantId);
-    if (v && !tracksInventory(v)) continue; // productos sin control de inventario (bolsas, kits)
+    if (tracked.get(it.variantId) === false) continue; // sin control de inventario (bolsas, kits)
     const { error } = await db.rpc("decrement_stock", {
       p_variant: it.variantId, p_location_key: "tienda",
       p_qty: it.qty, p_ref_type: "order", p_ref_id: order.id,
     });
     if (error) {
+      if (creditTotal > 0) await db.rpc("reverse_credit_charge", { p_order: order.id });
       await db.from("orders").delete().eq("id", order.id);
       const conflict = String(error.message).includes("STOCK_INSUFICIENTE");
       return { ok: false, conflict, error: `Stock: ${error.message}` };
@@ -203,12 +261,25 @@ async function applySale(
   }
 
   // Pagos: efectivo/tarjeta/transferencia van a caja; Rewards canjea saldo.
+  // El fiado también deja movimiento (method 'credit') para que el corte lo reporte
+  // como "fiado del turno" sin sumarlo a ningún esperado.
   for (const p of payments) {
     await db.from("payments").insert({ order_id: order.id, method: p.method, amount_cents: p.amountCents, status: "completed" });
     if (p.method === "rewards") {
       await db.rpc("redeem_rewards", { p_customer: customerId, p_order: order.id, p_amount_cents: p.amountCents, p_channel: "pos" });
     } else {
-      await db.from("cash_movements").insert({ session_id: input.sessionId, type: "sale", method: p.method, amount_cents: p.amountCents, reference_id: order.id, created_by: staffId });
+      const { error } = await db.from("cash_movements").insert({
+        session_id: input.sessionId, type: "sale", method: p.method, amount_cents: p.amountCents,
+        reference_id: order.id, reference_type: "order", created_by: staffId,
+      });
+      // Sin este movimiento la venta no aparecería en el corte: hay que enterarse.
+      // La orden ya está registrada, así que se avisa para NO volver a cobrarla.
+      if (error) {
+        return {
+          ok: false,
+          error: `La venta ${order.order_number} quedó registrada pero no se pudo anotar en caja (${error.message}). No la vuelvas a cobrar: avisa a administración.`,
+        };
+      }
     }
   }
 
@@ -303,49 +374,11 @@ export async function processSyncBatch(deviceId: string, ops: SyncOp[]): Promise
 }
 
 // ── Totales de la sesión (para el corte) ─────────────────────────────────────
-async function computeTotals(db: DB, sessionId: string) {
-  const { data: sess } = await db
-    .from("cash_sessions").select("opening_float_cents").eq("id", sessionId).maybeSingle();
-  const opening = (sess as { opening_float_cents: number } | null)?.opening_float_cents ?? 0;
-
-  const { data: movs } = await db
-    .from("cash_movements").select("type, method, amount_cents").eq("session_id", sessionId);
-
-  let cash = opening, debit = 0, credit = 0, amex = 0, cardLegacy = 0, transfer = 0, sales = 0, refunds = 0, drops = 0, precuts = 0;
-  for (const m of (movs as unknown as { type: string; method: string | null; amount_cents: number }[]) ?? []) {
-    const amt = m.amount_cents;
-    if (m.type === "sale") {
-      sales++;
-      if (m.method === "cash") cash += amt;
-      else if (m.method === "debit") debit += amt;
-      else if (m.method === "credit_card") credit += amt;
-      else if (m.method === "amex") amex += amt;
-      else if (m.method === "card") cardLegacy += amt; // ventas antiguas (tarjeta sin separar)
-      else if (m.method === "transfer") transfer += amt;
-    } else if (m.type === "in") cash += amt;
-    else if (m.type === "refund") { cash -= amt; refunds += amt; }
-    else if (m.type === "drop") { cash -= amt; drops += amt; }
-    else if (m.type === "precut") precuts += amt;
-    else if (["out", "expense"].includes(m.type)) cash -= amt;
-  }
-
-  // Descuentos aplicados en ventas de esta sesión.
-  const { data: ords } = await db.from("orders").select("discount_cents").eq("cash_session_id", sessionId);
-  const discounts = ((ords as unknown as { discount_cents: number }[]) ?? []).reduce((s, o) => s + (o.discount_cents ?? 0), 0);
-
-  return {
-    openingFloat: opening, expectedCash: cash,
-    expectedDebit: debit, expectedCredit: credit, expectedAmex: amex,
-    expectedCard: cardLegacy, // legacy "tarjeta" sin separar (0 en sesiones nuevas)
-    expectedTransfer: transfer,
-    salesCount: sales, refundsCents: refunds, dropsCents: drops, discountsCents: discounts, precutsCents: precuts,
-  };
-}
-
-export async function getSessionTotals(sessionId: string) {
+// El cálculo vive en lib/cash.ts y la carga en lib/cash-report.ts (compartidos).
+export async function getSessionTotals(sessionId: string): Promise<CashTotals> {
   await requireStaff();
   const db = createAdminClient();
-  return computeTotals(db, sessionId);
+  return loadSessionTotals(db, sessionId);
 }
 
 // ── Corte de caja ────────────────────────────────────────────────────────────
@@ -357,11 +390,15 @@ export async function closeSession(input: {
   countedAmexPesos: number;
   countedTransferPesos: number;
   peopleServed?: number;
-}): Promise<{ ok: boolean; error?: string; summary?: { expectedCash: number; countedCash: number; difference: number } }> {
+}): Promise<{
+  ok: boolean; error?: string;
+  summary?: { expectedCash: number; countedCash: number; difference: number };
+  receipt?: ReceiptData;
+}> {
   const staff = await requireStaff();
   const db = createAdminClient();
 
-  const totals = await computeTotals(db, input.sessionId);
+  const totals = await loadSessionTotals(db, input.sessionId);
   const countedCash = Math.round((input.countedCashPesos || 0) * 100);
   const countedDebit = Math.round((input.countedDebitPesos || 0) * 100);
   const countedCredit = Math.round((input.countedCreditPesos || 0) * 100);
@@ -395,23 +432,14 @@ export async function closeSession(input: {
     target_role: "admin",
   });
 
-  // Alerta de corte al correo de administración con todo el detalle.
-  const { data: sess } = await db.from("cash_sessions").select("opened_at, cash_registers(name)").eq("id", input.sessionId).maybeSingle();
-  const s = sess as unknown as { opened_at: string; cash_registers: { name: string } | { name: string }[] | null } | null;
-  const regRel = s?.cash_registers;
-  const registerName = (Array.isArray(regRel) ? regRel[0]?.name : regRel?.name) ?? "Caja";
-  await notifyCashCut({
-    sessionId: input.sessionId,
-    cashier: staff.fullName, registerName, openedAt: s?.opened_at ?? closedAt, closedAt,
-    lote: input.sessionId.slice(0, 8), peopleServed,
-    openingFloat: totals.openingFloat, salesCount: totals.salesCount,
-    discountsCents: totals.discountsCents, refundsCents: totals.refundsCents,
-    dropsCents: totals.dropsCents, precutsCents: totals.precutsCents,
-    expectedCash: totals.expectedCash, expectedTransfer: totals.expectedTransfer,
-    expectedDebit: totals.expectedDebit, expectedCredit: totals.expectedCredit, expectedAmex: totals.expectedAmex,
-    countedCash, countedDebit, countedCredit, countedAmex, countedTransfer, difference,
-  });
+  // Un solo reporte alimenta el correo de administración y el ticket impreso.
+  const report = await loadCashCutReport(db, input.sessionId);
+  if (report) await notifyCashCut(report);
 
   revalidatePath("/pos");
-  return { ok: true, summary: { expectedCash: totals.expectedCash, countedCash, difference } };
+  return {
+    ok: true,
+    summary: { expectedCash: totals.expectedCash, countedCash, difference },
+    receipt: report ? buildCashCutReceipt(report) : undefined,
+  };
 }

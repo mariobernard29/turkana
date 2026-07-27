@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { DocType } from "@/lib/escpos";
+import type { CashTotals } from "@/lib/cash";
+import { loadSessionTotals } from "@/lib/cash-report";
 
 type DB = ReturnType<typeof createAdminClient>;
 type Method = "cash" | "debit" | "credit_card" | "amex" | "transfer";
@@ -13,31 +16,7 @@ async function tiendaLoc(db: DB): Promise<string | null> {
   return (data as { id: string } | null)?.id ?? null;
 }
 
-async function sessionTotals(db: DB, sessionId: string) {
-  const { data: sess } = await db.from("cash_sessions").select("opening_float_cents").eq("id", sessionId).maybeSingle();
-  const opening = (sess as { opening_float_cents: number } | null)?.opening_float_cents ?? 0;
-  const { data: movs } = await db.from("cash_movements").select("type, method, amount_cents").eq("session_id", sessionId);
-  let cash = opening, debit = 0, credit = 0, amex = 0, cardLegacy = 0, transfer = 0, sales = 0;
-  for (const m of (movs as unknown as { type: string; method: string | null; amount_cents: number }[]) ?? []) {
-    const a = m.amount_cents;
-    if (m.type === "sale") {
-      sales++;
-      if (m.method === "cash") cash += a;
-      else if (m.method === "debit") debit += a;
-      else if (m.method === "credit_card") credit += a;
-      else if (m.method === "amex") amex += a;
-      else if (m.method === "card") cardLegacy += a;
-      else if (m.method === "transfer") transfer += a;
-    }
-    else if (m.type === "in") cash += a;
-    else if (["out", "drop", "expense", "refund"].includes(m.type)) cash -= a;
-  }
-  return { expectedCash: cash, expectedDebit: debit, expectedCredit: credit, expectedAmex: amex, expectedCard: cardLegacy, expectedTransfer: transfer, salesCount: sales };
-}
-
-export type CajaInfo = {
-  expectedCash: number; expectedTransfer: number; salesCount: number;
-  expectedDebit: number; expectedCredit: number; expectedAmex: number; expectedCard: number;
+export type CajaInfo = CashTotals & {
   thresholdCents: number;
   staff: { id: string; full_name: string }[];
 };
@@ -45,7 +24,7 @@ export type CajaInfo = {
 export async function getCajaInfo(sessionId: string): Promise<CajaInfo> {
   await requireStaff();
   const db = createAdminClient();
-  const totals = await sessionTotals(db, sessionId);
+  const totals = await loadSessionTotals(db, sessionId);
   const { data: setting } = await db.from("app_settings").select("value").eq("key", "cash_drop_threshold_cents").maybeSingle();
   const thresholdCents = Number((setting as { value: string } | null)?.value ?? "0");
   const { data: staff } = await db.from("profiles").select("id, full_name").eq("is_active", true).is("deleted_at", null).order("full_name");
@@ -56,6 +35,8 @@ export type Comprobante = {
   orderNumber: string;
   items: { name: string; quantity: number; total_cents: number }[];
   subtotal: number; tax: number; total: number; method: string;
+  docType: DocType;
+  attendedBy?: string;
 };
 
 // ── Resguardo (cash drop a caja fuerte) ──────────────────────────────────────
@@ -76,7 +57,11 @@ export async function createCashDrop(input: {
   revalidatePath("/pos");
   return {
     ok: true,
-    comprobante: { orderNumber: "RESGUARDO", items: [{ name: `Resguardo · ${staff.fullName}`, quantity: 1, total_cents: amount }], subtotal: amount, tax: 0, total: amount, method: "-" },
+    comprobante: {
+      orderNumber: "RESGUARDO", docType: "resguardo", attendedBy: staff.fullName,
+      items: [{ name: "Efectivo a caja fuerte", quantity: 1, total_cents: amount }],
+      subtotal: amount, tax: 0, total: amount, method: "-",
+    },
   };
 }
 
@@ -102,7 +87,7 @@ export async function precut(input: {
   return {
     ok: true,
     comprobante: {
-      orderNumber: "PRECORTE",
+      orderNumber: "PRECORTE", docType: "precorte", attendedBy: staff.fullName,
       items: [
         { name: "Efectivo", quantity: 1, total_cents: cash },
         { name: "Débito", quantity: 1, total_cents: debit },
@@ -145,7 +130,11 @@ export async function registerReturn(input: {
   revalidatePath("/pos");
   return {
     ok: true,
-    comprobante: { orderNumber: "DEVOLUCION", items: [{ name: "Devolución", quantity: input.qty, total_cents: refund }], subtotal: refund, tax: 0, total: refund, method: input.method },
+    comprobante: {
+      orderNumber: "DEVOLUCION", docType: "devolucion", attendedBy: staff.fullName,
+      items: [{ name: "Devolución de pieza", quantity: input.qty, total_cents: refund }],
+      subtotal: refund, tax: 0, total: refund, method: input.method,
+    },
   };
 }
 
@@ -189,8 +178,8 @@ export async function registerExchange(input: {
   return {
     ok: true, difference,
     comprobante: {
-      orderNumber: "CAMBIO",
-      items: [{ name: "Diferencia", quantity: 1, total_cents: Math.abs(difference) }],
+      orderNumber: "CAMBIO", docType: "cambio", attendedBy: staff.fullName,
+      items: [{ name: difference >= 0 ? "Diferencia a cobrar" : "Diferencia a reembolsar", quantity: 1, total_cents: Math.abs(difference) }],
       subtotal: Math.abs(difference), tax: 0, total: Math.abs(difference), method: input.method,
     },
   };

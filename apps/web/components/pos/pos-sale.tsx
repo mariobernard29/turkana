@@ -3,15 +3,17 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Search, Minus, Plus, Trash2, Loader2, AlertTriangle, Calculator, Gift, Menu, X } from "lucide-react";
-import { chargeSale, type SaleResult } from "@/app/pos/actions";
+import { Search, Minus, Plus, Trash2, Loader2, AlertTriangle, Calculator, Menu, X } from "lucide-react";
+import { chargeSale, type SaleResult, type CreditInput } from "@/app/pos/actions";
 import { getCajaInfo } from "@/app/pos/caja-actions";
-import { lookupRewardsCustomer } from "@/app/pos/rewards-actions";
+import type { PosCustomer } from "@/app/pos/customer-actions";
+import { CustomerSearch } from "@/components/pos/customer-search";
 import { formatMXN, productImageUrl, cn } from "@/lib/utils";
-import { POS_CARD_BUTTONS, type PaymentMethod } from "@/lib/payments";
+import { POS_CARD_BUTTONS, POS_METHODS, type PaymentMethod } from "@/lib/payments";
 import { PosClose } from "@/components/pos/pos-close";
 import { TicketModal } from "@/components/pos/ticket-modal";
 import { AccountsPanel } from "@/components/pos/accounts-panel";
+import { LayawayModal } from "@/components/pos/layaway-modal";
 import { ReturnsModal } from "@/components/pos/returns-modal";
 import { CajaPanel } from "@/components/pos/caja-panel";
 import { PaymentCalculator } from "@/components/pos/payment-calculator";
@@ -48,11 +50,10 @@ export function PosSale({
   const online = useOnline();
   const [query, setQuery] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
-  const [attached, setAttached] = useState<{ id: string; name: string; balanceCents: number } | null>(null);
-  const [attachEmail, setAttachEmail] = useState("");
-  const [attachErr, setAttachErr] = useState<string | null>(null);
-  const [attaching, setAttaching] = useState(false);
+  const [attached, setAttached] = useState<PosCustomer | null>(null);
   const [showCalc, setShowCalc] = useState(false);
+  const [showCredit, setShowCredit] = useState(false);
+  const [showLayaway, setShowLayaway] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showDiscount, setShowDiscount] = useState(false);
   const [discount, setDiscount] = useState<{ type: "percent" | "amount"; value: number; by: string; concept: string } | null>(null);
@@ -146,27 +147,20 @@ export function PosSale({
   const setQty = (id: string, qty: number) =>
     setLines((ls) => ls.flatMap((l) => (l.variantId === id ? (qty <= 0 ? [] : [{ ...l, qty: Math.min(qty, l.stock) }]) : [l])));
 
-  const finishTicket = (t: NonNullable<SaleResult["ticket"]>) => {
-    setTicket(t);
+  // Limpia el mostrador tras cobrar o apartar.
+  const clearSale = () => {
     setLines([]);
     setServiceLines([]);
     setAttached(null);
-    setAttachEmail("");
-    setAttachErr(null);
     setDiscount(null);
   };
 
-  const attach = async () => {
-    setAttachErr(null);
-    setAttaching(true);
-    const res = await lookupRewardsCustomer(attachEmail);
-    setAttaching(false);
-    if (!res.found) { setAttachErr(res.error); return; }
-    setAttached({ id: res.customerId, name: res.name, balanceCents: res.balanceCents });
-    setAttachEmail("");
+  const finishTicket = (t: NonNullable<SaleResult["ticket"]>) => {
+    setTicket(t);
+    clearSale();
   };
 
-  const charge = async (payments: Split[]) => {
+  const charge = async (payments: Split[], extra?: { credit?: CreditInput }) => {
     setShowCalc(false);
     setError(null);
     setBusy(true);
@@ -196,10 +190,16 @@ export function PosSale({
       setBusy(false);
     };
 
+    // El fiado necesita validar límite y registrar el cargo: no se puede encolar.
+    if (!online && extra?.credit) {
+      setError("El fiado requiere conexión");
+      setBusy(false);
+      return;
+    }
     if (!online) { await saveOffline(); return; }
 
     try {
-      const res = await chargeSale({ sessionId: session.id, items, services, payments, customerId: attached?.id, discount: discountPayload });
+      const res = await chargeSale({ sessionId: session.id, items, services, payments, customerId: attached?.id, discount: discountPayload, credit: extra?.credit });
       if (!res.ok) { setError(res.error ?? "Error al cobrar"); setBusy(false); return; }
       finishTicket(res.ticket ?? localTicket);
       setBusy(false);
@@ -379,36 +379,37 @@ export function PosSale({
             <p className="text-right text-xs text-muted">IVA incluido (16%): {formatMXN(tax)}</p>
           </div>
 
-          {/* Cliente Turkana Rewards */}
-          {attached ? (
-            <div className="mt-3 flex items-center justify-between rounded-xl bg-gold/10 px-3 py-2.5 text-sm">
-              <div>
-                <span className="text-ink">{attached.name}</span>
-                <span className="ml-2 text-gold">Saldo {formatMXN(attached.balanceCents)}</span>
+          {/* Cliente de la venta: necesario para fiado, apartado y Rewards */}
+          <div className="mt-3">
+            {attached ? (
+              <div className="flex items-center justify-between rounded-xl bg-gold/10 px-3 py-2.5 text-sm">
+                <div>
+                  <span className="text-ink">{attached.name}</span>
+                  {attached.phone && <span className="ml-2 text-muted">{attached.phone}</span>}
+                  {attached.rewardsBalanceCents > 0 && (
+                    <span className="ml-2 text-gold">Rewards {formatMXN(attached.rewardsBalanceCents)}</span>
+                  )}
+                  {attached.credit && (
+                    <span className="block text-xs text-muted">
+                      Crédito disponible {formatMXN(Math.max(0, attached.credit.limitCents - attached.credit.balanceCents))}
+                    </span>
+                  )}
+                </div>
+                <button onClick={() => setAttached(null)} className="text-muted hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
               </div>
-              <button onClick={() => setAttached(null)} className="text-muted hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
-            </div>
-          ) : (
-            <div className="mt-3 flex gap-2">
-              <input
-                type="email" placeholder="Correo cliente Rewards"
-                value={attachEmail} onChange={(e) => setAttachEmail(e.target.value)}
-                className="w-full rounded-xl border border-ink/15 px-3 py-2.5 text-sm outline-none focus:border-gold"
-              />
-              <button onClick={attach} disabled={attaching || !attachEmail} className="flex items-center gap-1 whitespace-nowrap rounded-xl border border-ink/15 px-3 text-sm text-ink hover:border-gold disabled:opacity-40">
-                {attaching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Gift className="h-4 w-4" />} Rewards
-              </button>
-            </div>
-          )}
-          {attachErr && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">{attachErr}</p>}
+            ) : (
+              <CustomerSearch onSelect={setAttached} placeholder="Cliente (nombre, teléfono o correo)…" />
+            )}
+          </div>
 
           {error && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
+          {/* Cobro de un toque; apartar y fiar viven en la calculadora */}
           <div className="mt-4 space-y-2">
             <button
               onClick={() => charge([{ method: "cash", amountCents: total }])}
               disabled={cobroDisabled}
-              className="flex w-full flex-col items-center rounded-2xl bg-ink py-3 text-cream transition-colors hover:bg-gold-dark disabled:opacity-40"
+              className="flex w-full items-center justify-between rounded-xl bg-ink px-4 py-3 text-cream transition-colors hover:bg-gold-dark disabled:opacity-40"
             >
               <span className="text-[11px] uppercase tracking-widest">Efectivo</span>
               <span className="text-lg font-semibold tabular-nums">{formatMXN(total)}</span>
@@ -419,10 +420,9 @@ export function PosSale({
                   key={b.key}
                   onClick={() => charge([{ method: b.key, amountCents: total }])}
                   disabled={cobroDisabled}
-                  className="flex flex-col items-center rounded-2xl bg-ink py-3 text-cream transition-colors hover:bg-gold-dark disabled:opacity-40"
+                  className="rounded-xl bg-ink py-2.5 text-[11px] uppercase tracking-widest text-cream transition-colors hover:bg-gold-dark disabled:opacity-40"
                 >
-                  <span className="text-[11px] uppercase tracking-widest">{b.label}</span>
-                  <span className="text-sm font-semibold tabular-nums">{formatMXN(total)}</span>
+                  {b.label}
                 </button>
               ))}
             </div>
@@ -430,9 +430,9 @@ export function PosSale({
           <button
             onClick={() => setShowCalc(true)}
             disabled={cobroDisabled}
-            className="mt-2 flex w-full items-center justify-center gap-2 rounded-full border border-ink/15 py-3 text-sm text-ink transition-colors hover:border-gold disabled:opacity-40"
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-full border border-ink/15 py-2.5 text-sm text-ink transition-colors hover:border-gold disabled:opacity-40"
           >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />} Pago dividido / calculadora
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />} Pago dividido, apartar o fiar
           </button>
         </div>
       </div>
@@ -445,7 +445,7 @@ export function PosSale({
           onClose={() => setShowService(false)}
         />
       )}
-      {showAccounts && <AccountsPanel sessionId={session.id} variants={flatVariants} onClose={() => setShowAccounts(false)} />}
+      {showAccounts && <AccountsPanel sessionId={session.id} onClose={() => setShowAccounts(false)} />}
       {showReturns && <ReturnsModal sessionId={session.id} variants={flatVariants} onClose={() => setShowReturns(false)} />}
       {showCaja && <CajaPanel sessionId={session.id} onClose={() => { setShowCaja(false); refreshCaja(); }} />}
       {pickProduct && (
@@ -467,11 +467,139 @@ export function PosSale({
       {showCalc && (
         <PaymentCalculator
           total={total}
-          rewardsMax={attached && online ? Math.min(attached.balanceCents, 100000, total) : 0}
+          rewardsMax={attached && online ? Math.min(attached.rewardsBalanceCents, 100000, total) : 0}
+          canLayaway={online && lines.length > 0}
+          canCredit={online && Boolean(attached)}
           onClose={() => setShowCalc(false)}
           onConfirm={(payments) => charge(payments)}
+          onLayaway={() => { setShowCalc(false); setShowLayaway(true); }}
+          onCredit={() => { setShowCalc(false); setShowCredit(true); }}
         />
       )}
+      {showLayaway && (
+        <LayawayModal
+          sessionId={session.id}
+          lines={lines.map((l) => ({ variantId: l.variantId, name: l.name, qty: l.qty, priceCents: l.priceCents }))}
+          total={lines.reduce((s, l) => s + l.priceCents * l.qty, 0)}
+          customer={attached}
+          onClose={() => setShowLayaway(false)}
+          onDone={() => { setShowLayaway(false); clearSale(); router.refresh(); refreshCaja(); }}
+        />
+      )}
+      {showCredit && attached && (
+        <CreditSaleModal
+          total={total}
+          customer={attached}
+          onClose={() => setShowCredit(false)}
+          onConfirm={(down, credit) => {
+            setShowCredit(false);
+            const splits: Split[] = [];
+            if (down) splits.push({ method: down.method, amountCents: down.amountCents });
+            splits.push({ method: "credit", amountCents: total - (down?.amountCents ?? 0) });
+            charge(splits, { credit });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Venta a crédito (fiado): el cliente se lleva la pieza dejando un abono inicial
+// (o nada) y el resto queda como saldo en su cuenta.
+function CreditSaleModal({
+  total,
+  customer,
+  onConfirm,
+  onClose,
+}: {
+  total: number;
+  customer: PosCustomer;
+  onConfirm: (downPayment: { method: PaymentMethod; amountCents: number } | null, credit: CreditInput) => void;
+  onClose: () => void;
+}) {
+  const [downStr, setDownStr] = useState("");
+  const [method, setMethod] = useState<PaymentMethod>("cash");
+  const [dueDate, setDueDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return d.toISOString().slice(0, 10);
+  });
+  const [by, setBy] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  const field = "w-full rounded-xl border border-ink/15 bg-white px-4 py-3 text-sm outline-none focus:border-gold";
+  const down = Math.min(total, Math.max(0, Math.round((Number(downStr) || 0) * 100)));
+  const toCredit = total - down;
+  const available = customer.credit ? Math.max(0, customer.credit.limitCents - customer.credit.balanceCents) : null;
+  const needsAuth = available !== null && toCredit > available;
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (toCredit <= 0) { setErr("El abono inicial ya cubre el total: cobra la venta normal"); return; }
+    if (needsAuth && !by.trim()) { setErr("Excede el crédito disponible: indica quién autoriza"); return; }
+    onConfirm(
+      down > 0 ? { method, amountCents: down } : null,
+      { dueDate, authorizedBy: by.trim() || undefined },
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" onClick={onClose}>
+      <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-white p-6">
+        <h3 className="mb-1 text-lg text-ink">Venta a crédito</h3>
+        <p className="mb-4 text-sm text-muted">
+          {customer.name}
+          {available !== null
+            ? ` · disponible ${formatMXN(available)}`
+            : " · se abrirá su cuenta de crédito"}
+        </p>
+
+        <div className="mb-4 space-y-1 rounded-xl bg-cream p-4 text-sm">
+          <div className="flex justify-between text-muted"><span>Total de la venta</span><span className="text-ink">{formatMXN(total)}</span></div>
+          <div className="flex justify-between text-muted"><span>Abono inicial</span><span className="text-ink">{formatMXN(down)}</span></div>
+          <div className="flex justify-between border-t border-ink/10 pt-1 text-muted">
+            <span>Queda a crédito</span><span className="text-lg font-semibold tabular-nums text-ink">{formatMXN(toCredit)}</span>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1.5 block text-xs uppercase tracking-wider text-muted">Abono inicial (opcional)</label>
+            <input className={field} type="number" step="0.01" min="0" inputMode="decimal" placeholder="0.00"
+              value={downStr} onChange={(e) => setDownStr(e.target.value)} />
+            <div className="mt-2 flex gap-2">
+              <button type="button" onClick={() => setDownStr("")} className="rounded-full border border-ink/15 px-3 py-1.5 text-xs text-muted hover:text-ink">Sin abono</button>
+              <button type="button" onClick={() => setDownStr((total / 200).toFixed(2))} className="rounded-full border border-ink/15 px-3 py-1.5 text-xs text-muted hover:text-ink">50%</button>
+            </div>
+          </div>
+          {down > 0 && (
+            <div>
+              <label className="mb-1.5 block text-xs uppercase tracking-wider text-muted">Método del abono</label>
+              <select className={field} value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
+                {POS_METHODS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="mb-1.5 block text-xs uppercase tracking-wider text-muted">Fecha límite de pago</label>
+            <input className={field} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          </div>
+          {needsAuth && (
+            <div>
+              <label className="mb-1.5 block text-xs uppercase tracking-wider text-muted">Autorizado por</label>
+              <input className={field} placeholder="Nombre de quien autoriza" value={by} onChange={(e) => setBy(e.target.value)} />
+            </div>
+          )}
+        </div>
+
+        {err && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}
+        <div className="mt-5 flex gap-2">
+          <button type="button" onClick={onClose} className="flex-1 rounded-full border border-ink/15 py-3 text-sm text-ink">Cancelar</button>
+          <button type="submit" className="flex-1 rounded-full bg-ink py-3 text-sm uppercase tracking-widest text-cream hover:bg-gold-dark">
+            Fiar {formatMXN(toCredit)}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

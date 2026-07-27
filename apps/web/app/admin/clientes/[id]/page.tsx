@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { formatMXN } from "@/lib/utils";
 import { LayawaysManager, type LayawayRow } from "@/components/admin/layaways-manager";
 import { CreditsManager, type CreditRow } from "@/components/admin/credits-manager";
-import { STATUS_LABEL, STATUS_STYLE } from "@/app/admin/pedidos/page";
+import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from "@/lib/orders";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ async function loadCustomer(id: string) {
     db.from("customers").select("full_name, email, phone, customer_addresses(street, ext_number, city, state, postal_code)").eq("id", id).maybeSingle(),
     db.from("orders").select("id, order_number, status, total_cents, channel, created_at").eq("customer_id", id).is("deleted_at", null).order("created_at", { ascending: false }).limit(50),
     db.from("credit_accounts").select("id, limit_cents, balance_cents, status, credit_transactions(type, due_date)").eq("customer_id", id),
-    db.from("layaways").select("id, total_cents, paid_cents, status, due_date, product_variants(sku, products(name))").eq("customer_id", id).order("created_at", { ascending: false }),
+    db.from("layaways").select("id, total_cents, paid_cents, status, due_date, layaway_items(name, quantity)").eq("customer_id", id).order("created_at", { ascending: false }),
   ]);
 
   const c = cust.data as {
@@ -26,12 +26,13 @@ async function loadCustomer(id: string) {
     customer_addresses: { street: string; ext_number: string | null; city: string | null; state: string | null; postal_code: string | null }[] | null;
   } | null;
 
-  type RawLay = { id: string; total_cents: number; paid_cents: number; status: string; due_date: string | null; product_variants: { sku: string; products: { name: string } | { name: string }[] | null } | { sku: string; products: { name: string } | { name: string }[] | null }[] | null };
-  const layRows: LayawayRow[] = ((layaways.data as unknown as RawLay[]) ?? []).map((l) => {
-    const v = one(l.product_variants);
-    const p = v ? one(v.products) : null;
-    return { id: l.id, customer: c?.full_name ?? "", item: p?.name ?? v?.sku ?? "Apartado", total: l.total_cents, paid: l.paid_cents, dueDate: l.due_date, status: l.status };
-  });
+  type RawLay = { id: string; total_cents: number; paid_cents: number; status: string; due_date: string | null; layaway_items: { name: string; quantity: number }[] | null };
+  const layRows: LayawayRow[] = ((layaways.data as unknown as RawLay[]) ?? []).map((l) => ({
+    id: l.id,
+    customer: c?.full_name ?? "",
+    item: (l.layaway_items ?? []).map((it) => `${it.quantity}× ${it.name}`).join(" · ") || "Apartado",
+    total: l.total_cents, paid: l.paid_cents, dueDate: l.due_date, status: l.status,
+  }));
 
   type RawCred = { id: string; limit_cents: number; balance_cents: number; status: string; credit_transactions: { type: string; due_date: string | null }[] | null };
   const credRows: CreditRow[] = ((credits.data as unknown as RawCred[]) ?? []).map((a) => {
@@ -87,18 +88,18 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           </section>
 
           <section className="overflow-hidden rounded-2xl border border-ink/10 bg-white shadow-sm">
-            <h2 className="border-b border-ink/10 px-6 py-4 text-lg text-ink">Pedidos</h2>
+            <h2 className="border-b border-ink/10 px-6 py-4 text-lg text-ink">Ventas</h2>
             {orders.length === 0 ? (
-              <p className="p-6 text-sm text-muted">Sin pedidos.</p>
+              <p className="p-6 text-sm text-muted">Sin ventas.</p>
             ) : (
               <table className="w-full text-left text-sm">
                 <tbody>
                   {orders.map((o) => (
                     <tr key={o.id} className="border-b border-ink/5 last:border-0 hover:bg-cream/50">
-                      <td className="px-6 py-3"><Link href={`/admin/pedidos/${o.id}`} className="text-ink hover:text-gold">{o.order_number}</Link></td>
+                      <td className="px-6 py-3"><Link href={`/admin/ventas/${o.id}`} className="text-ink hover:text-gold">{o.order_number}</Link></td>
                       <td className="px-6 py-3 text-muted">{new Date(o.created_at).toLocaleDateString("es-MX")}</td>
                       <td className="px-6 py-3 text-muted">{o.channel === "pos" ? "POS" : "Online"}</td>
-                      <td className="px-6 py-3"><span className={`rounded-full px-2.5 py-1 text-xs ${STATUS_STYLE[o.status] ?? ""}`}>{STATUS_LABEL[o.status] ?? o.status}</span></td>
+                      <td className="px-6 py-3"><span className={`rounded-full px-2.5 py-1 text-xs ${ORDER_STATUS_STYLE[o.status] ?? ""}`}>{ORDER_STATUS_LABEL[o.status] ?? o.status}</span></td>
                       <td className="px-6 py-3 text-right text-ink">{formatMXN(o.total_cents)}</td>
                     </tr>
                   ))}

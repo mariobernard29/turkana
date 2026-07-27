@@ -1,28 +1,9 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatMXN } from "@/lib/utils";
+import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from "@/lib/orders";
 
 export const dynamic = "force-dynamic";
-
-export const STATUS_LABEL: Record<string, string> = {
-  pending: "Pendiente",
-  paid: "Pagado",
-  preparing: "Preparando",
-  shipped: "Enviado",
-  delivered: "Entregado",
-  completed: "Completado",
-  cancelled: "Cancelado",
-};
-
-export const STATUS_STYLE: Record<string, string> = {
-  pending: "bg-amber-50 text-amber-700",
-  paid: "bg-blue-50 text-blue-700",
-  preparing: "bg-indigo-50 text-indigo-700",
-  shipped: "bg-violet-50 text-violet-700",
-  delivered: "bg-teal-50 text-teal-700",
-  completed: "bg-green-50 text-green-700",
-  cancelled: "bg-gray-100 text-gray-500",
-};
 
 type Row = {
   id: string;
@@ -71,8 +52,8 @@ export default async function OrdersPage({
 
   return (
     <div>
-      <h1 className="mb-1 text-3xl text-ink">Pedidos</h1>
-      <p className="mb-6 text-sm text-muted">{orders.length} pedidos</p>
+      <h1 className="mb-1 text-3xl text-ink">Ventas</h1>
+      <p className="mb-6 text-sm text-muted">{orders.length} ventas</p>
 
       {/* Filtros */}
       <form className="mb-8 flex flex-wrap items-end gap-3">
@@ -94,14 +75,14 @@ export default async function OrdersPage({
         </div>
         <button type="submit" className="rounded-full bg-ink px-6 py-2 text-sm uppercase tracking-widest text-cream hover:bg-gold-dark">Filtrar</button>
         {(f.canal || f.desde || f.hasta) && (
-          <Link href="/admin/pedidos" className="px-2 py-2 text-sm text-muted hover:text-ink">Limpiar</Link>
+          <Link href="/admin/ventas" className="px-2 py-2 text-sm text-muted hover:text-ink">Limpiar</Link>
         )}
       </form>
 
       {orders.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-ink/15 bg-white p-16 text-center">
-          <p className="font-serif text-xl text-ink">Aún no hay pedidos</p>
-          <p className="mt-2 text-sm text-muted">Las ventas online y de POS aparecerán aquí.</p>
+          <p className="font-serif text-xl text-ink">Aún no hay ventas</p>
+          <p className="mt-2 text-sm text-muted">Las ventas de tienda y en línea aparecerán aquí.</p>
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-ink/10 bg-white shadow-sm">
@@ -120,7 +101,7 @@ export default async function OrdersPage({
               {orders.map((o) => (
                 <tr key={o.id} className="border-b border-ink/5 last:border-0 hover:bg-cream/50">
                   <td className="px-6 py-4">
-                    <Link href={`/admin/pedidos/${o.id}`} className="text-ink hover:text-gold">
+                    <Link href={`/admin/ventas/${o.id}`} className="text-ink hover:text-gold">
                       {o.order_number}
                     </Link>
                   </td>
@@ -131,8 +112,8 @@ export default async function OrdersPage({
                   <td className="px-6 py-4 text-muted">{o.channel === "pos" ? "POS" : "Online"}</td>
                   <td className="px-6 py-4 text-ink">{formatMXN(o.total_cents)}</td>
                   <td className="px-6 py-4">
-                    <span className={`rounded-full px-3 py-1 text-xs ${STATUS_STYLE[o.status] ?? ""}`}>
-                      {STATUS_LABEL[o.status] ?? o.status}
+                    <span className={`rounded-full px-3 py-1 text-xs ${ORDER_STATUS_STYLE[o.status] ?? ""}`}>
+                      {ORDER_STATUS_LABEL[o.status] ?? o.status}
                     </span>
                   </td>
                 </tr>

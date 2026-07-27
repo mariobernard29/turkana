@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Delete, Check } from "lucide-react";
+import { X, Delete, Check, Bookmark, HandCoins } from "lucide-react";
 import { formatMXN, cn } from "@/lib/utils";
 import type { PaymentMethod } from "@/lib/payments";
 
@@ -10,12 +10,26 @@ type Split = { method: PaymentMethod; amountCents: number };
 export function PaymentCalculator({
   total,
   rewardsMax = 0,
+  canLayaway = false,
+  canCredit = false,
+  title = "Cobro",
+  confirmLabel = "Cobrar",
   onConfirm,
+  onLayaway,
+  onCredit,
   onClose,
 }: {
   total: number;
   rewardsMax?: number;
+  canLayaway?: boolean;
+  canCredit?: boolean;
+  // El admin la reutiliza para corregir el desglose de una venta ya cobrada.
+  title?: string;
+  confirmLabel?: string;
   onConfirm: (payments: Split[]) => void;
+  // Alternativas al cobro completo: dejar la pieza apartada o fiarla.
+  onLayaway?: () => void;
+  onCredit?: () => void;
   onClose: () => void;
 }) {
   // Métodos disponibles. Los no-efectivo se aplican en este orden; efectivo cubre el resto.
@@ -84,7 +98,10 @@ export function PaymentCalculator({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" onClick={onClose}>
       <div className="w-full max-w-2xl rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg text-ink">Cobro · {formatMXN(total)}</h3>
+          {/* El h3 es serif por defecto (globals.css); el importe va en sans. */}
+          <h3 className="text-lg text-ink">
+            {title} · <span className="font-sans font-semibold tabular-nums">{formatMXN(total)}</span>
+          </h3>
           <button onClick={onClose} className="text-muted hover:text-ink"><X className="h-5 w-5" /></button>
         </div>
 
@@ -105,16 +122,17 @@ export function PaymentCalculator({
                   {m.key === "cash" ? " (recibido)" : ""}
                   {m.key === "rewards" ? <span className="ml-1 text-xs text-gold">máx {formatMXN(rewardsMax)}</span> : ""}
                 </span>
-                <span className="font-serif text-lg text-ink">{formatMXN(cents(d[m.key]))}</span>
+                {/* Importes en sans con tabular-nums, igual que Total/Pagado/Falta */}
+                <span className="text-lg font-semibold tabular-nums text-ink">{formatMXN(cents(d[m.key]))}</span>
               </button>
             ))}
 
             <div className="space-y-1 rounded-xl bg-cream p-4 text-sm">
-              <div className="flex justify-between text-muted"><span>Total</span><span className="text-ink">{formatMXN(total)}</span></div>
-              <div className="flex justify-between text-muted"><span>Pagado</span><span className="text-ink">{formatMXN(Math.min(tendered, total))}</span></div>
+              <div className="flex justify-between text-muted"><span>Total</span><span className="tabular-nums text-ink">{formatMXN(total)}</span></div>
+              <div className="flex justify-between text-muted"><span>Pagado</span><span className="tabular-nums text-ink">{formatMXN(Math.min(tendered, total))}</span></div>
               {remaining > 0
-                ? <div className="flex justify-between font-medium text-amber-700"><span>Falta</span><span>{formatMXN(remaining)}</span></div>
-                : <div className="flex justify-between font-medium text-green-700"><span>Cambio</span><span>{formatMXN(change)}</span></div>}
+                ? <div className="flex justify-between font-medium text-amber-700"><span>Falta</span><span className="tabular-nums">{formatMXN(remaining)}</span></div>
+                : <div className="flex justify-between font-medium text-green-700"><span>Cambio</span><span className="tabular-nums">{formatMXN(change)}</span></div>}
             </div>
           </div>
 
@@ -135,6 +153,31 @@ export function PaymentCalculator({
               <button onClick={clear} className="rounded-xl border border-ink/15 py-3 text-sm text-ink hover:bg-cream">Limpiar</button>
               <button onClick={exact} className="rounded-xl border border-ink/15 py-3 text-sm text-ink hover:bg-cream">Exacto</button>
             </div>
+            {/* Alternativas al cobro completo, junto al teclado para no alargar el modal */}
+            {(onLayaway || onCredit) && (
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {onLayaway && (
+                  <button
+                    onClick={onLayaway}
+                    disabled={!canLayaway}
+                    title={!canLayaway ? "Agrega piezas al ticket (requiere conexión)" : "La pieza se queda en tienda hasta liquidar"}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-ink/15 py-3 text-sm text-ink hover:bg-cream disabled:opacity-40"
+                  >
+                    <Bookmark className="h-4 w-4" /> Apartar
+                  </button>
+                )}
+                {onCredit && (
+                  <button
+                    onClick={onCredit}
+                    disabled={!canCredit}
+                    title={!canCredit ? "Adjunta un cliente para fiar (requiere conexión)" : "El cliente se lleva la pieza y queda el saldo"}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-ink/15 py-3 text-sm text-ink hover:bg-cream disabled:opacity-40"
+                  >
+                    <HandCoins className="h-4 w-4" /> Fiado
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -143,7 +186,8 @@ export function PaymentCalculator({
           disabled={!valid}
           className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-ink py-4 text-sm uppercase tracking-widest text-cream transition-colors hover:bg-gold-dark disabled:opacity-40"
         >
-          <Check className="h-4 w-4" /> Cobrar {formatMXN(total)}{change > 0 ? ` · cambio ${formatMXN(change)}` : ""}
+          <Check className="h-4 w-4" /> {confirmLabel} <span className="tabular-nums">{formatMXN(total)}</span>
+          {change > 0 ? <> · cambio <span className="tabular-nums">{formatMXN(change)}</span></> : ""}
         </button>
       </div>
     </div>

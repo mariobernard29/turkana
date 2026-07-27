@@ -3,9 +3,13 @@ import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatMXN } from "@/lib/utils";
+import { requireStaff } from "@/lib/auth";
 import { OrderActions } from "@/components/admin/order-actions";
+import { SaleAdminActions } from "@/components/admin/sale-admin-actions";
+import { ReceiptPrintButton } from "@/components/admin/receipt-print-button";
 import { methodLabel } from "@/lib/payments";
-import { STATUS_LABEL, STATUS_STYLE } from "../page";
+import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from "@/lib/orders";
+import type { ReceiptData } from "@/lib/escpos";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +24,7 @@ type RawOrder = {
   channel: string;
   status: string;
   subtotal_cents: number;
+  discount_cents: number;
   shipping_cents: number;
   tax_cents: number;
   total_cents: number;
@@ -55,16 +60,44 @@ export default async function OrderDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const order = await loadOrder(id);
+  const [order, staff] = await Promise.all([loadOrder(id), requireStaff()]);
   if (!order) notFound();
 
   const customer = pick(order.customers);
   const addr = pick(order.shipping_address);
+  const isAdmin = ["super_admin", "admin"].includes(staff.role ?? "");
+  const isPos = order.channel === "pos";
+
+  // Ticket reconstruido desde la orden guardada, con su folio y fecha originales.
+  const receipt: ReceiptData = {
+    docType: "sale",
+    orderNumber: order.order_number,
+    items: (order.order_items ?? []).map((it) => ({ name: it.name, quantity: it.quantity, total_cents: it.total_cents })),
+    subtotal: order.subtotal_cents,
+    tax: order.tax_cents,
+    total: order.total_cents,
+    discountCents: order.discount_cents ?? 0,
+    payments: (order.payments ?? [])
+      .filter((p) => p.status === "completed")
+      .map((p) => ({ method: p.method, amount_cents: p.amount_cents })),
+    dateIso: order.created_at,
+    reprint: true,
+    // En línea el envío se suma al total; sin esta línea el ticket no cuadraría.
+    // Una venta cancelada se marca para que su ticket no pase por válido.
+    sections: [
+      ...(order.shipping_cents > 0
+        ? [{ rows: [{ label: "Envío", value: formatMXN(order.shipping_cents) }] }]
+        : []),
+      ...(order.status === "cancelled"
+        ? [{ rows: [{ label: "*** VENTA CANCELADA ***", strong: true }] }]
+        : []),
+    ],
+  };
 
   return (
     <div>
-      <Link href="/admin/pedidos" className="mb-4 inline-flex items-center gap-1 text-sm text-muted hover:text-ink">
-        <ChevronLeft className="h-4 w-4" /> Pedidos
+      <Link href="/admin/ventas" className="mb-4 inline-flex items-center gap-1 text-sm text-muted hover:text-ink">
+        <ChevronLeft className="h-4 w-4" /> Ventas
       </Link>
 
       <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
@@ -74,9 +107,12 @@ export default async function OrderDetailPage({
             {new Date(order.created_at).toLocaleString("es-MX")} · {order.channel === "pos" ? "POS" : "Online"}
           </p>
         </div>
-        <span className={`rounded-full px-4 py-1.5 text-sm ${STATUS_STYLE[order.status] ?? ""}`}>
-          {STATUS_LABEL[order.status] ?? order.status}
-        </span>
+        <div className="flex items-center gap-3">
+          <ReceiptPrintButton receipt={receipt} />
+          <span className={`rounded-full px-4 py-1.5 text-sm ${ORDER_STATUS_STYLE[order.status] ?? ""}`}>
+            {ORDER_STATUS_LABEL[order.status] ?? order.status}
+          </span>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -108,6 +144,7 @@ export default async function OrderDetailPage({
             </table>
             <div className="space-y-1.5 border-t border-ink/10 p-6 text-sm">
               <Row label="Subtotal" value={formatMXN(order.subtotal_cents)} />
+              {order.discount_cents > 0 && <Row label="Descuento" value={`−${formatMXN(order.discount_cents)}`} />}
               <Row label="Envío" value={order.shipping_cents === 0 ? "Gratis" : formatMXN(order.shipping_cents)} />
               <Row label="IVA (16%)" value={formatMXN(order.tax_cents)} />
               <div className="flex justify-between border-t border-ink/10 pt-2 text-base text-ink">
@@ -123,9 +160,21 @@ export default async function OrderDetailPage({
           </section>
 
           <section className="rounded-2xl border border-ink/10 bg-white p-6">
-            <h2 className="mb-4 text-lg text-ink">Gestión del pedido</h2>
-            <OrderActions orderId={order.id} status={order.status} hasEmail={Boolean(customer?.email)} />
+            <h2 className="mb-4 text-lg text-ink">Gestión de la venta</h2>
+            <OrderActions orderId={order.id} status={order.status} hasEmail={Boolean(customer?.email)} isPos={isPos} />
           </section>
+
+          {/* Cancelar / corregir pagos: sólo admins y sólo ventas de tienda activas */}
+          {isAdmin && isPos && order.status !== "cancelled" && (
+            <SaleAdminActions
+              orderId={order.id}
+              orderNumber={order.order_number}
+              totalCents={order.total_cents}
+              payments={(order.payments ?? [])
+                .filter((p) => p.status === "completed")
+                .map((p) => ({ method: p.method, amount_cents: p.amount_cents }))}
+            />
+          )}
         </div>
 
         {/* Cliente / dirección / pago */}
