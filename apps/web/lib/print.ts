@@ -75,10 +75,32 @@ export async function printEscPosUSB(data: ReceiptData): Promise<void> {
   try { await device.close(); } catch { /* noop */ }
 }
 
-// Respaldo universal: abre una ventana con el ticket (80mm) y lanza imprimir.
-export function printReceiptHTML(data: ReceiptData): void {
+// Abre el documento y deja que el propio script lance el diálogo de impresión.
+// Si el navegador bloquea la ventana emergente, se imprime desde un iframe oculto
+// para que el ticket nunca se pierda en silencio.
+function openForPrint(html: string, title: string): void {
   const w = window.open("", "_blank", "width=380,height=700");
-  if (!w) return;
+  if (w) {
+    w.document.write(html);
+    w.document.close();
+    return;
+  }
+  const frame = document.createElement("iframe");
+  frame.title = title;
+  frame.setAttribute("aria-hidden", "true");
+  frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+  document.body.appendChild(frame);
+  const doc = frame.contentWindow?.document;
+  if (!doc) { frame.remove(); return; }
+  doc.open();
+  doc.write(html);
+  doc.close();
+  // El diálogo es modal: se limpia después, sin prisa.
+  setTimeout(() => frame.remove(), 60000);
+}
+
+// Respaldo universal: arma el ticket (80mm) y lanza imprimir.
+export function printReceiptHTML(data: ReceiptData): void {
   const kind = docType(data);
   const sale = isSale(data);
   const customerDoc = isCustomerDoc(data);
@@ -124,7 +146,7 @@ export function printReceiptHTML(data: ReceiptData): void {
       <hr class="dash"/>`)
     .join("");
 
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8">
+  const html = `<!doctype html><html><head><meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(data.orderNumber)}</title>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -167,13 +189,36 @@ export function printReceiptHTML(data: ReceiptData): void {
     td.strong { font-size: 15px; font-weight: 800; }
     .reprint { text-align: center; font-size: 12px; font-weight: 800; letter-spacing: 4px; margin: 0 0 6px; }
     /* Talón: se corta y se pega a la pieza en tienda */
-    .cutline { position: relative; text-align: center; margin: 22px 0 14px; border-top: 2px dashed #000; }
+    /* El talón arranca en página nueva: así la impresora corta justo ahí y salen
+       dos comprobantes separados (en ESC/POS es un corte parcial real). */
+    .cutline { position: relative; text-align: center; margin: 22px 0 14px; border-top: 2px dashed #000;
+               break-before: page; page-break-before: always; }
     .cutline span { position: relative; top: -9px; background: #fff; padding: 0 6px; font-size: 11px; font-weight: 700; }
     .stub { border: 2px solid #000; padding: 8px 7px; }
     .stubbrand { text-align: center; font-size: 12px; font-weight: 700; letter-spacing: 5px; margin: 0; }
     .stubtitle { text-align: center; font-size: 20px; font-weight: 800; letter-spacing: 1px; margin: 2px 0 0; }
     .stubsub { text-align: center; font-size: 13px; font-weight: 700; margin: 2px 0 0; }
-  </style></head><body>
+    /* Si el papel se corta por largo, que el corte caiga ENTRE bloques y nunca
+       a media fila ni separando un título de su tabla. */
+    tr, .totbox, .stub, .issuer { break-inside: avoid; page-break-inside: avoid; }
+    .section, .doctitle, .cutline { break-after: avoid; page-break-after: avoid; }
+    /* El corte de caja es largo por naturaleza: va más compacto para caber. */
+    body.corte { font-size: 12px; line-height: 1.25; }
+    body.corte img.logo { width: 40mm; margin-bottom: 4px; }
+    body.corte .tagline { font-size: 11px; letter-spacing: 4px; margin-bottom: 5px; }
+    body.corte .issuer { font-size: 11px; line-height: 1.3; }
+    body.corte .doctitle { font-size: 16px; margin: 5px 0 4px; }
+    body.corte .meta { font-size: 12px; }
+    body.corte .section { font-size: 10.5px; letter-spacing: 2px; margin: 6px 0 3px; }
+    body.corte td { padding: 0; }
+    body.corte td.ind { padding-left: 8px; }
+    body.corte td.strong { font-size: 12.5px; }
+    body.corte .rule, body.corte .dash { margin: 4px 0; }
+    body.corte .totbox { padding: 3px 6px; margin: 6px 0; }
+    body.corte .totbox td { font-size: 18px; }
+    body.corte .totbox td.lbl { font-size: 14px; }
+    body.corte .sig { margin-top: 16px; }
+  </style></head><body class="${kind}">
     <img class="logo" src="${LOGO_SRC}" alt="${STORE.brand}" />
     <p class="tagline">${STORE.tagline}</p>
 
@@ -229,19 +274,30 @@ export function printReceiptHTML(data: ReceiptData): void {
 
     <script>
       (function () {
+        var printed = false;
+        function go() {
+          if (printed) return;
+          printed = true;
+          window.focus();
+          window.print();
+          setTimeout(function () { window.close(); }, 400);
+        }
         var imgs = Array.prototype.map.call(document.images, function (im) {
           return im.complete ? Promise.resolve() : new Promise(function (r) { im.onload = im.onerror = r; });
         });
-        var fonts = document.fonts
-          ? Promise.race([document.fonts.ready, new Promise(function (r) { setTimeout(r, 1500); })])
-          : Promise.resolve();
-        Promise.all(imgs.concat([fonts])).then(function () {
-          window.focus(); window.print(); setTimeout(function () { window.close(); }, 400);
-        });
+        var fonts = document.fonts ? document.fonts.ready : Promise.resolve();
+        // Se espera al logo y a la fuente, pero NUNCA más de 2s: si una petición se
+        // cuelga (POS sin red), igual se abre el diálogo en vez de quedarse en blanco.
+        Promise.race([
+          Promise.all(imgs.concat([fonts])),
+          new Promise(function (r) { setTimeout(r, 2000); }),
+        ]).then(go, go);
+        window.addEventListener("load", function () { setTimeout(go, 2500); });
       })();
     </script>
-  </body></html>`);
-  w.document.close();
+  </body></html>`;
+
+  openForPrint(html, data.orderNumber);
 }
 
 function escapeHtml(s: string) {
