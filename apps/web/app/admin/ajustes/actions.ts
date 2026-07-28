@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { parseAlertEmails } from "@/lib/admin-alerts";
 
 export async function sendTestEmail(email: string): Promise<{ ok: boolean; error?: string; from?: string }> {
   await requireStaff();
@@ -52,13 +53,16 @@ const DESCRIPTIONS: Record<string, string> = {
   [BIZ_KEYS.standard]: "Envío estándar (centavos)",
   [BIZ_KEYS.express]: "Envío express (centavos)",
   [BIZ_KEYS.cashDrop]: "Límite de efectivo en caja (centavos)",
-  [BIZ_KEYS.adminEmail]: "Correo de administración para alertas",
+  [BIZ_KEYS.adminEmail]: "Correos de administración para alertas (separados por coma)",
   [BIZ_KEYS.lowStock]: "Umbral de inventario bajo (piezas)",
 };
 
 export type BusinessSettings = {
   freeThresholdCents: number; standardCents: number; expressCents: number; cashDropCents: number;
-  adminEmail: string; lowStockThreshold: number;
+  // Dos destinatarios para las alertas; se guardan en una sola clave, separados
+  // por coma (ver parseAlertEmails en lib/admin-alerts).
+  adminEmail: string; adminEmail2: string;
+  lowStockThreshold: number;
 };
 
 export async function getBusinessSettings(): Promise<BusinessSettings> {
@@ -67,12 +71,14 @@ export async function getBusinessSettings(): Promise<BusinessSettings> {
   const { data } = await db.from("app_settings").select("key, value").in("key", Object.values(BIZ_KEYS));
   const map = new Map(((data as unknown as { key: string; value: string }[]) ?? []).map((r) => [r.key, r.value]));
   const num = (k: string, d: number) => parseInt(map.get(k) ?? "", 10) || d;
+  const emails = parseAlertEmails(map.get(BIZ_KEYS.adminEmail));
   return {
     freeThresholdCents: num(BIZ_KEYS.freeThreshold, 199900),
     standardCents: num(BIZ_KEYS.standard, 11000),
     expressCents: num(BIZ_KEYS.express, 15900),
     cashDropCents: num(BIZ_KEYS.cashDrop, 1000000),
-    adminEmail: (map.get(BIZ_KEYS.adminEmail) ?? "").trim(),
+    adminEmail: emails[0] ?? "",
+    adminEmail2: emails[1] ?? "",
     lowStockThreshold: num(BIZ_KEYS.lowStock, 5),
   };
 }
@@ -88,7 +94,13 @@ export async function updateBusinessSettings(input: BusinessSettings): Promise<{
     [BIZ_KEYS.express, input.expressCents],
     [BIZ_KEYS.cashDrop, input.cashDropCents],
   ];
-  if (input.adminEmail && !/^\S+@\S+\.\S+$/.test(input.adminEmail)) return { ok: false, error: "Correo de administración inválido" };
+  const alertEmails = [input.adminEmail, input.adminEmail2].map((e) => (e ?? "").trim()).filter(Boolean);
+  for (const e of alertEmails) {
+    if (!/^\S+@\S+\.\S+$/.test(e)) return { ok: false, error: `Correo de administración inválido: ${e}` };
+  }
+  if (alertEmails.length === 2 && alertEmails[0].toLowerCase() === alertEmails[1].toLowerCase()) {
+    return { ok: false, error: "Los dos correos de administración son el mismo" };
+  }
 
   const rows: { key: string; value: string; description: string }[] = [
     ...money.map(([k, v]) => {
@@ -96,7 +108,7 @@ export async function updateBusinessSettings(input: BusinessSettings): Promise<{
       return { key: k, value: String(Math.round(v)), description: DESCRIPTIONS[k] };
     }),
     { key: BIZ_KEYS.lowStock, value: String(Math.max(1, Math.round(input.lowStockThreshold || 5))), description: DESCRIPTIONS[BIZ_KEYS.lowStock] },
-    { key: BIZ_KEYS.adminEmail, value: input.adminEmail.trim(), description: DESCRIPTIONS[BIZ_KEYS.adminEmail] },
+    { key: BIZ_KEYS.adminEmail, value: alertEmails.join(", "), description: DESCRIPTIONS[BIZ_KEYS.adminEmail] },
   ];
   const { error } = await db.from("app_settings").upsert(rows, { onConflict: "key" });
   if (error) return { ok: false, error: error.message };

@@ -5,14 +5,23 @@ import type { CashCutReport } from "@/lib/cash-report";
 
 const money = (c: number) => `$${(c / 100).toFixed(2)}`;
 
-export async function getAlertConfig(): Promise<{ email: string; threshold: number }> {
+// Los correos de administración se guardan en una sola clave separados por coma,
+// así se admiten varios destinatarios sin cambiar el esquema.
+export function parseAlertEmails(value: string | null | undefined): string[] {
+  return (value ?? "").split(",").map((e) => e.trim()).filter(Boolean);
+}
+
+export async function getAlertConfig(): Promise<{ emails: string[]; threshold: number }> {
   try {
     const db = createAdminClient();
     const { data } = await db.from("app_settings").select("key, value").in("key", ["admin_alert_email", "low_stock_threshold"]);
     const map = new Map(((data as unknown as { key: string; value: string }[]) ?? []).map((r) => [r.key, r.value]));
-    return { email: (map.get("admin_alert_email") ?? "").trim(), threshold: parseInt(map.get("low_stock_threshold") ?? "5", 10) || 5 };
+    return {
+      emails: parseAlertEmails(map.get("admin_alert_email")),
+      threshold: parseInt(map.get("low_stock_threshold") ?? "5", 10) || 5,
+    };
   } catch {
-    return { email: "", threshold: 5 };
+    return { emails: [], threshold: 5 };
   }
 }
 
@@ -31,30 +40,39 @@ function layout(title: string, inner: string, subtitle: string, footer: string) 
 }
 
 // audience "customer" → subtítulo JEWELRY; "admin" → PANEL DE ADMINISTRACIÓN.
-async function send(to: string, subject: string, title: string, inner: string, audience: "admin" | "customer" = "admin") {
+// `to` admite varios destinatarios (Resend acepta un arreglo en un solo envío).
+async function send(
+  to: string | string[],
+  subject: string,
+  title: string,
+  inner: string,
+  audience: "admin" | "customer" = "admin",
+) {
+  const recipients = (Array.isArray(to) ? to : [to]).map((e) => e.trim()).filter(Boolean);
   const subtitle = audience === "customer" ? "JEWELRY" : "PANEL DE ADMINISTRACIÓN";
   const footer = audience === "customer"
     ? "Turkana Jewelry · Plaza Alcazar Business Park · Los Mochis, Sinaloa"
     : "Alerta automática de Turkana Jewelry.";
   const key = process.env.RESEND_API_KEY;
-  if (!key || !key.startsWith("re_") || !to) {
-    console.warn("[alerts] no se envía correo:", !to ? "destinatario vacío" : "RESEND_API_KEY no configurada");
+  if (!key || !key.startsWith("re_") || !recipients.length) {
+    console.warn("[alerts] no se envía correo:", !recipients.length ? "destinatario vacío" : "RESEND_API_KEY no configurada");
     return;
   }
+  const label = recipients.join(", ");
   try {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         from: process.env.EMAIL_FROM ?? "Turkana Jewelry <onboarding@resend.dev>",
-        to, subject, html: layout(title, inner, subtitle, footer),
+        to: recipients, subject, html: layout(title, inner, subtitle, footer),
       }),
     });
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
-      console.error(`[alerts] Resend rechazó el correo a ${to}:`, (body as { message?: string }).message ?? r.status);
+      console.error(`[alerts] Resend rechazó el correo a ${label}:`, (body as { message?: string }).message ?? r.status);
     } else {
-      console.log(`[alerts] correo enviado a ${to}: ${subject}`);
+      console.log(`[alerts] correo enviado a ${label}: ${subject}`);
     }
   } catch (e) {
     console.error("[alerts] error enviando correo:", e);
@@ -65,7 +83,7 @@ const row = (l: string, v: string) => `<tr><td style="padding:3px 0;color:#666">
 
 // ── Pedido pagado: confirmación al cliente + alerta al admin ────────────────────
 export async function notifyOrderPaid(orderId: string) {
-  const { email: adminEmail } = await getAlertConfig();
+  const { emails: adminEmails } = await getAlertConfig();
   const db = createAdminClient();
 
   const { data } = await db
@@ -114,7 +132,7 @@ export async function notifyOrderPaid(orderId: string) {
   }
 
   // Alerta al ADMIN (detalle interno completo).
-  if (adminEmail) {
+  if (adminEmails.length) {
     const adminInner = `
       <p style="margin:0 0 12px"><strong>Folio ${o.order_number}</strong> · ${new Date(o.created_at).toLocaleString("es-MX")}</p>
       <p style="margin:0 0 4px;font-size:13px"><strong>Cliente:</strong> ${cust?.full_name ?? "—"}</p>
@@ -122,7 +140,7 @@ export async function notifyOrderPaid(orderId: string) {
       <p style="margin:0 0 4px;font-size:13px"><strong>Envío (${o.shipping_method ?? "—"}):</strong> ${addr}</p>
       ${itemsTable}
       ${totalsHtml}`;
-    await send(adminEmail, `🛒 Nueva venta en línea ${o.order_number} — ${money(o.total_cents)}`, "Nueva venta en línea", adminInner);
+    await send(adminEmails, `🛒 Nueva venta en línea ${o.order_number} — ${money(o.total_cents)}`, "Nueva venta en línea", adminInner);
   }
 }
 
@@ -135,8 +153,8 @@ const KIND_SUFFIX: Record<string, string> = {
 };
 
 export async function notifyCashCut(r: CashCutReport) {
-  const { email } = await getAlertConfig();
-  if (!email) return;
+  const { emails } = await getAlertConfig();
+  if (!emails.length) return;
 
   const salesHtml = r.sales.length === 0
     ? `<p style="font-size:13px;color:#999;margin:0">Sin ventas registradas en el lote.</p>`
@@ -180,7 +198,7 @@ export async function notifyCashCut(r: CashCutReport) {
       ${countedPairs(r.counted).map((p) => row(p.label, money(p.cents))).join("")}
     </table>
     <p style="margin:14px 0 0;font-size:15px;text-align:right"><strong>Diferencia: <span style="color:${diffColor}">${r.difference >= 0 ? "+" : ""}${money(r.difference)}</span></strong></p>`;
-  await send(email, `🧾 Corte de caja — ${r.registerName} (${r.difference === 0 ? "cuadró" : "dif. " + money(r.difference)})`, "Corte de caja", inner);
+  await send(emails, `🧾 Corte de caja — ${r.registerName} (${r.difference === 0 ? "cuadró" : "dif. " + money(r.difference)})`, "Corte de caja", inner);
 }
 
 // ── Inventario bajo ─────────────────────────────────────────────────────────────
@@ -189,8 +207,8 @@ export async function checkLowStockAfterSale(
   locationKey: "tienda" | "ecommerce",
   locationLabel: string,
 ) {
-  const { email, threshold } = await getAlertConfig();
-  if (!email || entries.length === 0) return;
+  const { emails, threshold } = await getAlertConfig();
+  if (!emails.length || entries.length === 0) return;
   const db = createAdminClient();
 
   const { data: loc } = await db.from("inventory_locations").select("id").eq("key", locationKey).maybeSingle();
@@ -222,5 +240,5 @@ export async function checkLowStockAfterSale(
   const inner = `
     <p style="margin:0 0 8px;font-size:13px">Estos productos llegaron a <strong>${threshold} piezas o menos</strong> en <strong>${locationLabel}</strong>. Considera reabastecer o hacer un traspaso.</p>
     <table style="width:100%;border-collapse:collapse;font-size:13px;border-top:1px solid #eee;border-bottom:1px solid #eee">${rows}</table>`;
-  await send(email, `⚠️ Inventario bajo — ${locationLabel} (${low.length})`, "Inventario bajo", inner);
+  await send(emails, `⚠️ Inventario bajo — ${locationLabel} (${low.length})`, "Inventario bajo", inner);
 }

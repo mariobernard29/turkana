@@ -14,6 +14,7 @@ export function BusinessSettingsForm({ initial }: { initial: BusinessSettings })
   const [express, setExpress] = useState(toPesos(initial.expressCents));
   const [cashDrop, setCashDrop] = useState(toPesos(initial.cashDropCents));
   const [adminEmail, setAdminEmail] = useState(initial.adminEmail);
+  const [adminEmail2, setAdminEmail2] = useState(initial.adminEmail2);
   const [lowStock, setLowStock] = useState(String(initial.lowStockThreshold));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ k: "ok" | "err"; t: string } | null>(null);
@@ -23,7 +24,8 @@ export function BusinessSettingsForm({ initial }: { initial: BusinessSettings })
     const res = await updateBusinessSettings({
       freeThresholdCents: toCents(free), standardCents: toCents(standard),
       expressCents: toCents(express), cashDropCents: toCents(cashDrop),
-      adminEmail: adminEmail.trim(), lowStockThreshold: parseInt(lowStock, 10) || 5,
+      adminEmail: adminEmail.trim(), adminEmail2: adminEmail2.trim(),
+      lowStockThreshold: parseInt(lowStock, 10) || 5,
     });
     setBusy(false);
     setMsg(res.ok ? { k: "ok", t: "Parámetros guardados" } : { k: "err", t: res.error ?? "Error" });
@@ -54,12 +56,18 @@ export function BusinessSettingsForm({ initial }: { initial: BusinessSettings })
 
       <div className="mt-8 border-t border-ink/10 pt-6">
         <h3 className="text-sm font-medium text-ink">Alertas por correo</h3>
-        <p className="mt-1 text-sm text-muted">Correo que recibirá avisos de ventas en línea, cortes de caja e inventario bajo.</p>
+        <p className="mt-1 text-sm text-muted">Correos que recibirán avisos de ventas en línea, cortes de caja e inventario bajo.</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1.5 block text-xs uppercase tracking-wider text-muted">Correo de administración</label>
             <input type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="admin@turkanajewerly.com"
               className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm outline-none focus:border-gold" />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs uppercase tracking-wider text-muted">Segundo correo (opcional)</label>
+            <input type="email" value={adminEmail2} onChange={(e) => setAdminEmail2(e.target.value)} placeholder="gerencia@turkanajewerly.com"
+              className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm outline-none focus:border-gold" />
+            <p className="mt-1 text-xs text-muted">Ambos reciben la misma alerta en un solo envío.</p>
           </div>
           <div>
             <label className="mb-1.5 block text-xs uppercase tracking-wider text-muted">Alerta de inventario bajo (piezas)</label>
