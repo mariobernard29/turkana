@@ -25,6 +25,62 @@ export async function loadSessionTotals(db: DB, sessionId: string): Promise<Cash
   return computeCashTotals(opening, (movs as unknown as CashMovementRow[]) ?? [], discounts);
 }
 
+// ── Turnos abiertos ──────────────────────────────────────────────────────────
+// El turno es POR CAJERO: si dos personas usan el POS, cada una corta el suyo.
+// Sin esta lista era imposible notar que había dinero en el turno de alguien más.
+export type OpenSession = {
+  id: string;
+  lote: string;
+  cashier: string;
+  registerName: string;
+  openedAt: string;
+  expectedCash: number;
+  salesCount: number;
+};
+
+export async function loadOpenSessions(db: DB): Promise<OpenSession[]> {
+  const { data } = await db
+    .from("cash_sessions")
+    .select("id, opened_at, opening_float_cents, cashier_id, cash_registers(name)")
+    .eq("status", "open")
+    .order("opened_at", { ascending: true });
+  const sessions = (data as unknown as {
+    id: string; opened_at: string; opening_float_cents: number; cashier_id: string | null;
+    cash_registers: { name: string } | { name: string }[] | null;
+  }[]) ?? [];
+  if (!sessions.length) return [];
+
+  const ids = sessions.map((s) => s.id);
+  const names = new Map<string, string>();
+  const cashierIds = [...new Set(sessions.map((s) => s.cashier_id).filter(Boolean) as string[])];
+  if (cashierIds.length) {
+    const { data: profs } = await db.from("profiles").select("id, full_name").in("id", cashierIds);
+    for (const p of (profs as unknown as { id: string; full_name: string }[]) ?? []) names.set(p.id, p.full_name);
+  }
+
+  const { data: movs } = await db
+    .from("cash_movements").select("session_id, type, method, amount_cents, reference_type").in("session_id", ids);
+  const bySession = new Map<string, CashMovementRow[]>();
+  for (const m of (movs as unknown as (CashMovementRow & { session_id: string })[]) ?? []) {
+    const list = bySession.get(m.session_id) ?? [];
+    list.push(m);
+    bySession.set(m.session_id, list);
+  }
+
+  return sessions.map((s) => {
+    const totals = computeCashTotals(s.opening_float_cents, bySession.get(s.id) ?? []);
+    return {
+      id: s.id,
+      lote: s.id.slice(0, 8),
+      cashier: s.cashier_id ? names.get(s.cashier_id) ?? "—" : "—",
+      registerName: one(s.cash_registers)?.name ?? "Caja",
+      openedAt: s.opened_at,
+      expectedCash: totals.expectedCash,
+      salesCount: totals.salesCount,
+    };
+  });
+}
+
 // ── Reporte completo del corte ───────────────────────────────────────────────
 export type SessionSale = {
   orderNumber: string;

@@ -3,6 +3,7 @@ import { ChevronLeft } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatMXN } from "@/lib/utils";
 import { CutPrintButton } from "@/components/admin/cut-print-button";
+import { loadOpenSessions } from "@/lib/cash-report";
 
 export const dynamic = "force-dynamic";
 
@@ -53,9 +54,17 @@ async function load(f: Filters): Promise<{ rows: Row[]; names: Record<string, st
 
 const reg = (c: Row["cash_registers"]) => (Array.isArray(c) ? c[0]?.name : c?.name) ?? "—";
 
+async function loadOpen() {
+  try {
+    return await loadOpenSessions(createAdminClient());
+  } catch {
+    return [];
+  }
+}
+
 export default async function CortesPage({ searchParams }: { searchParams: Promise<Filters> }) {
   const f = await searchParams;
-  const { rows, names } = await load(f);
+  const [{ rows, names }, open] = await Promise.all([load(f), loadOpen()]);
   const inputCls = "rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm outline-none focus:border-gold";
 
   return (
@@ -65,6 +74,28 @@ export default async function CortesPage({ searchParams }: { searchParams: Promi
       </Link>
       <h1 className="mb-1 text-3xl text-ink">Cortes de caja</h1>
       <p className="mb-6 text-sm text-muted">{rows.length} cortes realizados</p>
+
+      {/* Turnos sin cortar: su dinero todavía no aparece en ningún corte. */}
+      {open.length > 0 && (
+        <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <p className="mb-2 text-sm font-medium text-amber-900">
+            {open.length === 1 ? "1 turno abierto" : `${open.length} turnos abiertos`} · su dinero aún no está en ningún corte
+          </p>
+          <div className="space-y-1 text-sm text-amber-900">
+            {open.map((s) => (
+              <div key={s.id} className="flex flex-wrap justify-between gap-2">
+                <span>
+                  {s.registerName} · {s.cashier} · desde {new Date(s.openedAt).toLocaleString("es-MX")} · {s.salesCount} cobro(s)
+                </span>
+                <span className="tabular-nums">Efectivo esperado {formatMXN(s.expectedCash)}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-amber-800">
+            El turno es por cajero: cada uno cierra el suyo desde el POS con su propia sesión.
+          </p>
+        </div>
+      )}
 
       <form className="mb-8 flex flex-wrap items-end gap-3">
         <div>

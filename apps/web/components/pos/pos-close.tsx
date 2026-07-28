@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X, Loader2, Printer } from "lucide-react";
 import { getSessionTotals, closeSession } from "@/app/pos/actions";
+import { getOtherOpenSessions } from "@/app/pos/corte-actions";
+import type { OpenSession } from "@/lib/cash-report";
 import { printReceiptHTML } from "@/lib/print";
 import type { ReceiptData } from "@/lib/escpos";
 import { formatMXN, cn } from "@/lib/utils";
@@ -28,9 +30,13 @@ export function PosClose({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ expectedCash: number; countedCash: number; difference: number } | null>(null);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  const [others, setOthers] = useState<OpenSession[]>([]);
 
   useEffect(() => {
     getSessionTotals(sessionId).then(setTotals);
+    // El turno es por cajero: si otro tiene el suyo abierto, su dinero NO entra
+    // en este corte y hay que decirlo antes de cerrar.
+    getOtherOpenSessions(sessionId).then(setOthers);
   }, [sessionId]);
 
   const submit = async (e: React.FormEvent) => {
@@ -62,6 +68,24 @@ export function PosClose({
           <h3 className="text-xl text-ink">Corte de caja</h3>
           {!done && <button onClick={onClose} className="text-muted hover:text-ink"><X className="h-5 w-5" /></button>}
         </div>
+
+        {/* El corte cubre SÓLO este turno; si hay otros abiertos, se avisa. */}
+        {!done && others.length > 0 && (
+          <div className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-xs text-amber-800">
+            <p className="font-medium">
+              Hay {others.length === 1 ? "otro turno abierto" : `otros ${others.length} turnos abiertos`}: este corte no lo incluye.
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {others.map((o) => (
+                <li key={o.id}>
+                  {o.cashier} · desde {new Date(o.openedAt).toLocaleString("es-MX")} · {o.salesCount} cobro(s) ·
+                  efectivo esperado <span className="tabular-nums">{formatMXN(o.expectedCash)}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1">Cada cajero cierra su propio turno desde su sesión.</p>
+          </div>
+        )}
 
         {!totals ? (
           <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-gold" /></div>
