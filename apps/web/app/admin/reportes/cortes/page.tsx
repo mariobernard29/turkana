@@ -79,7 +79,7 @@ export default async function CortesPage({ searchParams }: { searchParams: Promi
       {open.length > 0 && (
         <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-5">
           <p className="mb-2 text-sm font-medium text-amber-900">
-            {open.length === 1 ? "1 turno abierto" : `${open.length} turnos abiertos`} · su dinero aún no está en ningún corte
+            Turno abierto · su dinero aún no está en ningún corte
           </p>
           <div className="space-y-1 text-sm text-amber-900">
             {open.map((s) => (
@@ -92,7 +92,7 @@ export default async function CortesPage({ searchParams }: { searchParams: Promi
             ))}
           </div>
           <p className="mt-2 text-xs text-amber-800">
-            El turno es por cajero: cada uno cierra el suyo desde el POS con su propia sesión.
+            Hay un solo turno para toda la tienda; cualquier cajero puede cerrarlo desde el POS.
           </p>
         </div>
       )}

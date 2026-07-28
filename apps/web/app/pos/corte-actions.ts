@@ -8,13 +8,13 @@ import { loadCashCutReport, loadOpenSessions, type OpenSession } from "@/lib/cas
 import { buildCashCutReceipt } from "@/lib/cash-receipt";
 import type { ReceiptData } from "@/lib/escpos";
 
-// Otros turnos abiertos (de otros cajeros): el corte sólo cubre el propio, así
-// que hay que avisar si hay dinero esperando en otro lado.
-export async function getOtherOpenSessions(currentSessionId: string): Promise<OpenSession[]> {
+// Quién abrió el turno y desde cuándo: el turno es uno solo para la tienda, así
+// que quien cierra puede no ser quien lo abrió.
+export async function getOpenSessionInfo(sessionId: string): Promise<OpenSession | null> {
   await requireStaff();
   const db = createAdminClient();
   const all = await loadOpenSessions(db);
-  return all.filter((s) => s.id !== currentSessionId);
+  return all.find((s) => s.id === sessionId) ?? null;
 }
 
 export async function getCashCutReceipt(

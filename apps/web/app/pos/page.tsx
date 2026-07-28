@@ -1,4 +1,4 @@
-import { getStaff } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PosOpen } from "@/components/pos/pos-open";
 import { PosSale, type PosProduct } from "@/components/pos/pos-sale";
@@ -25,14 +25,18 @@ function sortTallas(a: { talla: string }, b: { talla: string }) {
   return a.talla.localeCompare(b.talla);
 }
 
-async function loadPos(staffId: string) {
+async function loadPos() {
   const db = createAdminClient();
 
+  // Hay UN turno a la vez para toda la tienda, sin importar quién lo abrió: el
+  // cajón es uno solo. Antes el turno era por cajero y una venta cobrada con
+  // otra cuenta no entraba en el corte de quien cerraba.
   const { data: sessionData } = await db
     .from("cash_sessions")
     .select("id, opening_float_cents, opened_at")
-    .eq("cashier_id", staffId)
     .eq("status", "open")
+    .order("opened_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
   const session = sessionData as unknown as { id: string; opening_float_cents: number } | null;
 
@@ -80,8 +84,8 @@ async function loadPos(staffId: string) {
 }
 
 export default async function PosPage() {
-  const staff = await getStaff();
-  const { session, registers, products, categories } = await loadPos(staff!.id);
+  await requireStaff("/pos");
+  const { session, registers, products, categories } = await loadPos();
 
   if (!session) {
     return <PosOpen registers={registers} />;

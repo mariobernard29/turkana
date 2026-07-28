@@ -23,9 +23,11 @@ export async function openSession(input: {
   const staff = await requireStaff();
   const db = createAdminClient();
 
+  // Un solo turno a la vez para toda la tienda (el cajón es uno). Si ya hay uno
+  // abierto —lo haya abierto quien sea— se sigue usando ese.
   const { data: existing } = await db
-    .from("cash_sessions").select("id")
-    .eq("cashier_id", staff.id).eq("status", "open").maybeSingle();
+    .from("cash_sessions").select("id").eq("status", "open")
+    .order("opened_at", { ascending: true }).limit(1).maybeSingle();
   if (existing) return { ok: true };
 
   const { error } = await db.from("cash_sessions").insert({
@@ -34,7 +36,12 @@ export async function openSession(input: {
     opening_float_cents: Math.round((input.openingFloatPesos || 0) * 100),
     status: "open",
   });
-  if (error) return { ok: false, error: error.message };
+  // El índice único de la BD evita dos turnos si alguien abre desde otro equipo
+  // al mismo tiempo; en ese caso ya hay turno y se continúa con él.
+  if (error) {
+    if (error.code === "23505") return { ok: true };
+    return { ok: false, error: error.message };
+  }
 
   revalidatePath("/pos");
   return { ok: true };
