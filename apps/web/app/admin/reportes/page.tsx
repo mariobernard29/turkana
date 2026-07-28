@@ -59,18 +59,17 @@ async function loadReport(range: Range) {
     return ((data as unknown as Record<string, number>[]) ?? []).reduce((s, r) => s + (r[col] ?? 0), 0);
   }, 0);
 
-  const [creditOutstanding, layawaysActive, layawayPending, rewardsBalance, lowStock] = await Promise.all([
+  const [creditOutstanding, layawaysActive, layawayPending, lowStock] = await Promise.all([
     sum("credit_accounts", "balance_cents", (q) => q.gt("balance_cents", 0)),
     count("layaways", (q) => q.eq("status", "active")),
     safe(async () => {
       const { data } = await db.from("layaways").select("total_cents, paid_cents").eq("status", "active");
       return ((data as unknown as { total_cents: number; paid_cents: number }[]) ?? []).reduce((s, l) => s + (l.total_cents - l.paid_cents), 0);
     }, 0),
-    sum("customer_rewards", "balance_cents", (q) => q),
     count("stock_levels", (q) => q.eq("quantity", 0)),
   ]);
 
-  return { sales, methods, topProducts, creditOutstanding, layawaysActive, layawayPending, rewardsBalance, lowStock };
+  return { sales, methods, topProducts, creditOutstanding, layawaysActive, layawayPending, lowStock };
 }
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ range?: Range }> }) {
@@ -101,7 +100,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <KpiCard label={`Ventas · ${RANGE_LABEL[range]}`} value={formatMXN(r.sales.total)} hint={`${r.sales.count} ventas`} />
         <KpiCard label="Ticket promedio" value={formatMXN(r.sales.avg)} />
         <KpiCard label="POS / Online" value={`${formatMXN(r.sales.pos)}`} hint={`Online ${formatMXN(r.sales.online)}`} />
-        <KpiCard label="Rewards en circulación" value={formatMXN(r.rewardsBalance)} />
         <KpiCard label="Créditos por cobrar" value={formatMXN(r.creditOutstanding)} />
         <KpiCard label="Apartados activos" value={String(r.layawaysActive)} hint={`Saldo ${formatMXN(r.layawayPending)}`} />
         <KpiCard label="Variantes agotadas" value={String(r.lowStock)} />

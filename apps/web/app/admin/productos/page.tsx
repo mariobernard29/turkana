@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CategoriesManager } from "@/components/admin/categories-manager";
 import { ProductsTable, type ProductRow } from "@/components/admin/products-table";
+import { ProductsExcel } from "@/components/admin/products-excel";
 
 export const dynamic = "force-dynamic";
 
@@ -64,12 +65,15 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             {products.length} piezas {filtered ? "en el filtro" : "en catálogo"}
           </p>
         </div>
-        <Link
-          href="/admin/productos/nuevo"
-          className="flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm uppercase tracking-widest text-cream transition-colors hover:bg-gold-dark"
-        >
-          <Plus className="h-4 w-4" /> Nuevo
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <ProductsExcel />
+          <Link
+            href="/admin/productos/nuevo"
+            className="flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm uppercase tracking-widest text-cream transition-colors hover:bg-gold-dark"
+          >
+            <Plus className="h-4 w-4" /> Nuevo
+          </Link>
+        </div>
       </div>
 
       {/* Filtros de catálogo (el buscador por texto vive en la tabla) */}

@@ -50,42 +50,48 @@ export function PaymentCalculator({
   );
 
   const cents = (s: string) => Number(s || "0");
-  const cashReceived = cents(d.cash ?? "");
+  const raw = (k: string) => cents(d[k] ?? "");
+  const cashReceived = raw("cash");
 
-  // Aplicar cada método no-efectivo en orden, capando a lo que falta (rewards además al saldo).
-  const applied: Record<string, number> = {};
-  let acc = 0;
-  for (const key of nonCashKeys) {
-    const cap = key === "rewards" ? Math.min(rewardsMax, total - acc) : total - acc;
-    const a = Math.max(0, Math.min(cents(d[key] ?? ""), Math.max(0, cap)));
-    applied[key] = a;
-    acc += a;
-  }
-  const nonCashTotal = acc;
+  // Los importes se toman TAL CUAL se teclean (antes las tarjetas se capaban en
+  // silencio al total y el sobrepago desaparecía sin avisar).
+  // Rewards es la excepción: nunca puede pasar del saldo del cliente.
+  const rewardsTyped = raw("rewards");
+  const rewardsApplied = Math.min(rewardsTyped, rewardsMax);
+  const rewardsOver = rewardsTyped - rewardsApplied;
+  const cardsTotal = nonCashKeys.filter((k) => k !== "rewards").reduce((s, k) => s + raw(k), 0);
+
+  const nonCashTotal = cardsTotal + rewardsApplied;
   const cashNeeded = Math.max(0, total - nonCashTotal);
   const tendered = nonCashTotal + cashReceived;
-  const change = Math.max(0, cashReceived - cashNeeded);
   const remaining = Math.max(0, total - tendered);
-  const valid = tendered >= total;
+  // El cambio sale del efectivo; de una tarjeta no se puede dar cambio.
+  const change = Math.max(0, Math.min(cashReceived, tendered - total));
+  const overNonCash = Math.max(0, nonCashTotal - total);
+  const valid = tendered >= total && overNonCash === 0 && rewardsOver === 0;
 
   const press = (digit: string) => setD((p) => ({ ...p, [active]: ((p[active] ?? "") + digit).replace(/^0+/, "").slice(0, 9) }));
   const back = () => setD((p) => ({ ...p, [active]: (p[active] ?? "").slice(0, -1) }));
   const clear = () => setD((p) => ({ ...p, [active]: "" }));
+  // Billetes: suman al efectivo recibido sin teclear los centavos.
+  const addCash = (c: number) => setD((p) => ({ ...p, cash: String(cents(p.cash ?? "") + c) }));
   // Rellena el método activo con lo que falta para llegar al total.
   const exact = () => {
-    const already = methods
-      .map((m) => m.key)
-      .filter((k) => k !== active)
-      .reduce((s, k) => s + Math.min(cents(d[k] ?? ""), k === "rewards" ? rewardsMax : total), 0);
-    let fill = Math.max(0, total - already);
+    const others = methods
+      .filter((m) => m.key !== active)
+      .reduce((s, m) => s + (m.key === "rewards" ? Math.min(raw("rewards"), rewardsMax) : raw(m.key)), 0);
+    let fill = Math.max(0, total - others);
     if (active === "rewards") fill = Math.min(fill, rewardsMax);
     setD((p) => ({ ...p, [active]: String(fill) }));
   };
 
+  // Se cobra exactamente el total: del efectivo sólo va lo necesario, el resto
+  // es cambio. Los no-efectivo ya están validados para no exceder el total.
   const confirm = () => {
     const payments: Split[] = [];
     for (const key of nonCashKeys) {
-      if (applied[key] > 0) payments.push({ method: key, amountCents: applied[key] });
+      const amount = key === "rewards" ? rewardsApplied : raw(key);
+      if (amount > 0) payments.push({ method: key, amountCents: amount });
     }
     if (cashNeeded > 0) payments.push({ method: "cash", amountCents: cashNeeded });
     if (payments.length === 0) payments.push({ method: "cash", amountCents: total });
@@ -129,11 +135,37 @@ export function PaymentCalculator({
 
             <div className="space-y-1 rounded-xl bg-cream p-4 text-sm">
               <div className="flex justify-between text-muted"><span>Total</span><span className="tabular-nums text-ink">{formatMXN(total)}</span></div>
-              <div className="flex justify-between text-muted"><span>Pagado</span><span className="tabular-nums text-ink">{formatMXN(Math.min(tendered, total))}</span></div>
-              {remaining > 0
-                ? <div className="flex justify-between font-medium text-amber-700"><span>Falta</span><span className="tabular-nums">{formatMXN(remaining)}</span></div>
-                : <div className="flex justify-between font-medium text-green-700"><span>Cambio</span><span className="tabular-nums">{formatMXN(change)}</span></div>}
+              <div className="flex justify-between text-muted"><span>Recibido</span><span className="tabular-nums text-ink">{formatMXN(tendered)}</span></div>
+              {remaining > 0 && (
+                <div className="flex justify-between border-t border-ink/10 pt-1 font-medium text-amber-700">
+                  <span>Falta</span><span className="tabular-nums">{formatMXN(remaining)}</span>
+                </div>
+              )}
+              {change > 0 && (
+                <div className="flex items-baseline justify-between border-t border-ink/10 pt-1 text-green-700">
+                  <span className="font-medium">Cambio a entregar</span>
+                  <span className="text-2xl font-semibold tabular-nums">{formatMXN(change)}</span>
+                </div>
+              )}
+              {remaining === 0 && change === 0 && overNonCash === 0 && !rewardsOver && (
+                <div className="flex justify-between border-t border-ink/10 pt-1 font-medium text-green-700">
+                  <span>Pago exacto</span><span className="tabular-nums">{formatMXN(0)}</span>
+                </div>
+              )}
             </div>
+
+            {/* De una tarjeta no se puede dar cambio: hay que corregir el importe. */}
+            {overNonCash > 0 && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                Los pagos sin efectivo exceden el total por <strong>{formatMXN(overNonCash)}</strong>.
+                No se puede dar cambio de una tarjeta o transferencia: ajusta el importe cobrado.
+              </p>
+            )}
+            {rewardsOver > 0 && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                Rewards excede el saldo disponible por <strong>{formatMXN(rewardsOver)}</strong>.
+              </p>
+            )}
           </div>
 
           {/* Teclado */}
@@ -149,6 +181,18 @@ export function PaymentCalculator({
                 </button>
               ))}
             </div>
+            {/* El teclado captura centavos (los 2 últimos dígitos), así que para
+                efectivo se ofrecen billetes: "mil pesos" es un toque, no 6 teclas. */}
+            {active === "cash" && (
+              <div className="mt-2 grid grid-cols-4 gap-2">
+                {[10000, 20000, 50000, 100000].map((c) => (
+                  <button key={c} onClick={() => addCash(c)}
+                    className="rounded-xl border border-ink/15 py-2.5 text-sm tabular-nums text-ink hover:bg-cream">
+                    +{formatMXN(c).replace(".00", "")}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="mt-2 grid grid-cols-2 gap-2">
               <button onClick={clear} className="rounded-xl border border-ink/15 py-3 text-sm text-ink hover:bg-cream">Limpiar</button>
               <button onClick={exact} className="rounded-xl border border-ink/15 py-3 text-sm text-ink hover:bg-cream">Exacto</button>
