@@ -1,7 +1,7 @@
 "use client";
 
-// Carga masiva del catálogo: exporta el Excel (que sirve de plantilla) e importa
-// el mismo archivo con filas nuevas o corregidas.
+// Alta masiva del catálogo: descarga la plantilla (con el catálogo actual, que
+// sirve de ejemplo) e importa el mismo archivo con las filas nuevas.
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Upload, Loader2 } from "lucide-react";
@@ -53,16 +53,16 @@ export function ProductsExcel() {
         <button
           onClick={download}
           disabled={busy !== null}
-          title="Descarga el catálogo actual; sirve de plantilla para cargar más"
+          title="Plantilla con las columnas a llenar y el catálogo actual de ejemplo"
           className="inline-flex items-center gap-2 rounded-full border border-ink/15 px-4 py-2.5 text-sm text-ink hover:border-gold disabled:opacity-50"
         >
           {busy === "export" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          Exportar Excel
+          Descargar plantilla
         </button>
         <button
           onClick={() => fileRef.current?.click()}
           disabled={busy !== null}
-          title="Sube el Excel: da de alta los productos nuevos y actualiza sólo lo que cambió"
+          title="Sube el Excel: da de alta los productos nuevos como borrador y actualiza sólo lo que cambió"
           className="inline-flex items-center gap-2 rounded-full border border-ink/15 px-4 py-2.5 text-sm text-ink hover:border-gold disabled:opacity-50"
         >
           {busy === "import" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
@@ -80,6 +80,11 @@ export function ProductsExcel() {
           }}
         />
       </div>
+
+      <p className="mt-2 max-w-md text-xs text-muted">
+        Los productos se dan de alta como borrador, ocultos en la web y con control de
+        inventario. Las existencias y las fotos se cargan después.
+      </p>
 
       {error && <p className="mt-3 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</p>}
 
