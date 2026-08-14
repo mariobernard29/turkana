@@ -85,7 +85,12 @@ export function PosSale({
     if (products.length) { setLocalProducts(products); cacheProducts(products as CachedProduct[]); }
   }, [products]);
   useEffect(() => {
-    if (!products.length) getCachedProducts().then((c) => { if (c.length) setLocalProducts(c as PosProduct[]); });
+    if (products.length) return;
+    // Catálogo vacío estando en línea = de verdad no hay productos dados de alta.
+    // La caché quedó obsoleta y hay que tirarla: mostrar esos productos fantasma
+    // sólo lleva a un cobro que falla porque sus variantes ya no existen.
+    if (navigator.onLine) { setLocalProducts([]); cacheProducts([]); return; }
+    getCachedProducts().then((c) => { if (c.length) setLocalProducts(c as PosProduct[]); });
   }, [products.length]);
   // Al volver la conexión, el servidor manda: limpia el stock optimista.
   useEffect(() => { if (online) setLocalSold({}); }, [online]);
@@ -319,7 +324,11 @@ export function PosSale({
             </button>
           ))}
           {filtered.length === 0 && (
-            <p className="col-span-full py-16 text-center text-muted">Sin productos con stock en tienda</p>
+            <p className="col-span-full py-16 text-center text-muted">
+              {localProducts.length === 0
+                ? "No hay productos dados de alta — agrégalos en el panel de administración"
+                : "Sin productos con stock en tienda"}
+            </p>
           )}
         </div>
       </div>
