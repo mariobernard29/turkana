@@ -18,6 +18,7 @@ type Option = { id: string; name: string };
 type VariantState = {
   id?: string;
   talla: string;
+  sku: string;   // cada talla lleva el suyo; vacío = hereda el del producto
   price: string;
   compareAt: string;
 };
@@ -91,9 +92,10 @@ export function ProductForm({
     initial?.variants.map((v) => ({
       id: v.id,
       talla: v.attributes?.talla ?? "",
+      sku: v.sku ?? "",
       price: (v.price_cents / 100).toString(),
       compareAt: v.compare_at_cents ? (v.compare_at_cents / 100).toString() : "",
-    })) ?? [{ talla: "", price: "", compareAt: "" }],
+    })) ?? [{ talla: "", sku: "", price: "", compareAt: "" }],
   );
   const [removedVariantIds, setRemovedVariantIds] = useState<string[]>([]);
   const [images, setImages] = useState<ImageState[]>(
@@ -108,7 +110,7 @@ export function ProductForm({
   const updateVariant = (i: number, patch: Partial<VariantState>) =>
     setVariants((vs) => vs.map((v, idx) => (idx === i ? { ...v, ...patch } : v)));
   const addVariant = () =>
-    setVariants((vs) => [...vs, { talla: "", price: "", compareAt: "" }]);
+    setVariants((vs) => [...vs, { talla: "", sku: "", price: "", compareAt: "" }]);
   const removeVariant = (i: number) =>
     setVariants((vs) => {
       const v = vs[i];
@@ -184,7 +186,9 @@ export function ProductForm({
       track_inventory: trackInventory,
       variants: variants.map((v) => ({
         id: v.id,
-        sku: sku.trim(), // todas las tallas comparten el código del producto
+        // Cada talla lleva su propio código; si lo dejan vacío hereda el del
+        // producto, que es el caso de las piezas que no manejan tallas.
+        sku: v.sku.trim() || sku.trim(),
         price: Number(v.price) || 0,
         compareAt: v.compareAt ? Number(v.compareAt) : null,
         attributes: (v.talla.trim() ? { talla: v.talla.trim() } : {}) as Record<string, string>,
@@ -256,6 +260,7 @@ export function ProductForm({
             <div>
               <label className={label}>Código / SKU</label>
               <input className={input} value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Ej. 123456" required />
+              <p className="mt-1 text-xs text-muted">Código general de la pieza; lo usan las tallas que no lleven el suyo.</p>
             </div>
           </div>
           <div>
@@ -302,21 +307,28 @@ export function ProductForm({
           }
         >
           <p className="-mt-2 mb-2 text-xs text-muted">
-            Todas las tallas comparten el código del producto. El stock se administra en Inventario.
-            Si el producto <strong>no maneja tallas</strong>, deja una sola fila con la talla vacía.
+            Cada talla lleva su propio código; si lo dejas vacío hereda el del producto.
+            El stock se administra en Inventario. Si el producto <strong>no maneja tallas</strong>,
+            deja una sola fila con la talla vacía.
           </p>
           <div className="space-y-3">
             {variants.map((v, i) => (
               <div key={i} className="rounded-xl border border-ink/10 p-3">
                 <div className="grid gap-2 sm:grid-cols-12">
                   <input
-                    className={cn(input, "sm:col-span-4")}
+                    className={cn(input, "sm:col-span-2")}
                     placeholder="Talla (ej. 7)"
                     value={v.talla}
                     onChange={(e) => updateVariant(i, { talla: e.target.value })}
                   />
                   <input
-                    className={cn(input, "sm:col-span-3")}
+                    className={cn(input, "sm:col-span-4")}
+                    placeholder={sku ? `Código (${sku})` : "Código de la talla"}
+                    value={v.sku}
+                    onChange={(e) => updateVariant(i, { sku: e.target.value })}
+                  />
+                  <input
+                    className={cn(input, "sm:col-span-2")}
                     placeholder="Precio"
                     type="number"
                     step="0.01"
@@ -335,7 +347,7 @@ export function ProductForm({
                   <button
                     type="button"
                     onClick={() => removeVariant(i)}
-                    className="flex items-center justify-center rounded-lg text-muted hover:text-red-600 sm:col-span-2"
+                    className="flex items-center justify-center rounded-lg text-muted hover:text-red-600 sm:col-span-1"
                     title="Quitar talla"
                   >
                     <Trash2 className="h-4 w-4" />

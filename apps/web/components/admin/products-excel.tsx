@@ -82,8 +82,10 @@ export function ProductsExcel() {
       </div>
 
       <p className="mt-2 max-w-md text-xs text-muted">
-        Los productos se dan de alta como borrador, ocultos en la web y con control de
-        inventario. Las existencias y las fotos se cargan después.
+        Una fila por talla, cada una con su propio código: las filas que comparten el
+        nombre son el mismo producto. La columna <strong>Inventario tienda</strong> deja
+        las piezas que hay en el mostrador (vacía = no se toca); el e-commerce se surte
+        desde Inventario. Los productos se dan de alta como borrador y ocultos en la web.
       </p>
 
       {error && <p className="mt-3 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</p>}
@@ -95,6 +97,7 @@ export function ProductsExcel() {
             <strong>{summary.actualizados}</strong> actualizado(s) ·{" "}
             <strong>{summary.sinCambios}</strong> sin cambios
             {summary.variantesNuevas > 0 && <> · <strong>{summary.variantesNuevas}</strong> talla(s) nueva(s)</>}
+            {summary.piezasCargadas > 0 && <> · inventario de tienda cargado en <strong>{summary.piezasCargadas}</strong> talla(s)</>}
           </p>
           {summary.categoriasCreadas.length > 0 && (
             <p className="mt-1 text-xs">Categorías creadas: {summary.categoriasCreadas.join(", ")}</p>

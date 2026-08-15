@@ -44,6 +44,13 @@ export type ProductInput = {
 
 const toCents = (pesos: number) => Math.round(pesos * 100);
 
+// El código es único entre tallas vivas: sin traducir, el choque llega como
+// "duplicate key value violates unique constraint", que no dice qué hacer.
+function variantError(sku: string, error: { code?: string; message: string }): string {
+  if (error.code === "23505") return `El código ${sku} ya lo tiene otra pieza del catálogo`;
+  return `Talla ${sku}: ${error.message}`;
+}
+
 export async function saveProduct(
   input: ProductInput,
 ): Promise<{ ok: boolean; id?: string; error?: string }> {
@@ -54,6 +61,13 @@ export async function saveProduct(
   if (!input.slug?.trim()) return { ok: false, error: "El slug es obligatorio" };
   if (input.variants.length === 0)
     return { ok: false, error: "Agrega al menos una variante (SKU + precio)" };
+  // Cada talla se identifica por su código: sin él no se puede cobrar ni contar.
+  const sinCodigo = input.variants.find((v) => !v.sku?.trim());
+  if (sinCodigo)
+    return { ok: false, error: `Falta el código de la talla${sinCodigo.attributes?.talla ? ` ${sinCodigo.attributes.talla}` : ""}` };
+  const codigos = input.variants.map((v) => v.sku.trim().toUpperCase());
+  if (new Set(codigos).size !== codigos.length)
+    return { ok: false, error: "Hay dos tallas con el mismo código" };
 
   const productRow = {
     name: input.name.trim(),
@@ -105,14 +119,14 @@ export async function saveProduct(
     };
     if (v.id) {
       const { error } = await db.from("product_variants").update(vrow).eq("id", v.id);
-      if (error) return { ok: false, error: `Variante ${v.sku}: ${error.message}` };
+      if (error) return { ok: false, error: variantError(v.sku, error) };
     } else {
       const { data, error } = await db
         .from("product_variants")
         .insert(vrow)
         .select("id")
         .single();
-      if (error) return { ok: false, error: `Variante ${v.sku}: ${error.message}` };
+      if (error) return { ok: false, error: variantError(v.sku, error) };
       // Stock inicial 0 en cada almacén.
       const variantId = (data as { id: string }).id;
       if (locationIds.length) {
