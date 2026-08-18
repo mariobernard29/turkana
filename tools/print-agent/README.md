@@ -56,14 +56,36 @@ impresora del mostrador** sin necesitar nada instalado.
 
    Debe salir una página que dice "Prueba de impresion".
 
-8. **Dejarlo corriendo solo:**
+8. **Dejarlo corriendo solo.** Lo más simple, sobre todo en la computadora de
+   la tienda: doble clic en **INSTALAR.cmd**. Se encarga solo de la política de
+   scripts y de la marca de "vino de internet", que son los dos muros con los
+   que se topa una máquina recién puesta.
+
+   Si prefieres hacerlo desde PowerShell:
 
    ```powershell
    .\instalar.ps1
    ```
 
-   Queda registrado como tarea de Windows: arranca al iniciar sesión y se vuelve
-   a levantar si se cae.
+   Cualquiera de las dos deja el agente **arrancando solo con Windows** y un
+   ícono **"Impresora Turkana"** en el escritorio. Ese ícono es lo único que el
+   personal necesita conocer: si alguien cierra la ventana por error, doble clic
+   y vuelve a andar, sin abrir ninguna terminal.
+
+### Si dice que el script no está firmado digitalmente
+
+No es la política: es la **marca de "vino de internet"**. Windows se la pone a
+todo lo que llega en un ZIP, por correo o en una USB, y con la política en
+`RemoteSigned` esos archivos sí necesitan firma aunque los locales no.
+
+Se quita así, parado en la carpeta del agente:
+
+```powershell
+Get-ChildItem -Recurse | Unblock-File
+```
+
+Sólo quita esa marca; no cambia la política ni baja la seguridad de la máquina.
+**INSTALAR.cmd** ya lo hace por su cuenta, así que con él no aparece este error.
 
 ### Si dice que la ejecución de scripts está deshabilitada
 
@@ -159,3 +181,8 @@ sólo con unos segundos de retraso.
 - Los tickets impresos se borran de la cola a los 7 días.
 - El `.env` no se sube al repositorio (lleva la contraseña del usuario de la
   impresora). El que sí está versionado es `.env.example`, y va sin valores.
+- Los `.cmd` y `.ps1` **tienen que quedar con saltos de línea CRLF**. Con saltos
+  de Unix, cmd.exe rompe los bloques entre paréntesis y la continuación con `^`,
+  y el error que suelta no dice nada del problema real. El `.gitattributes` de la
+  raíz lo fuerza; si alguna vez editas estos archivos desde Linux o macOS,
+  compruébalo antes de copiarlos a la tienda.

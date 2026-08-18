@@ -1,0 +1,14 @@
+# Los archivos de Windows tienen que llegar con CRLF pase lo que pase.
+#
+# cmd.exe rompe los bloques entre paréntesis y la continuación con ^ cuando el
+# archivo trae saltos de línea de Unix, y el error que suelta no dice nada del
+# problema real. Con esto, un clon en Linux o macOS —o una copia a una USB desde
+# ahí— sigue produciendo archivos que arrancan en la computadora de la tienda.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binarios: que git no les toque nada.
+*.ico binary
+*.png binary
+*.jpg binary

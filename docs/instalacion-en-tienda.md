@@ -90,14 +90,13 @@ Es lo que hace que el ticket salga sin la ventana de impresión del navegador.
    Debe salir la página que dice "Prueba de impresion". Si no sale, el problema
    es de red o de IP, no del sistema — ver `tools/print-agent/README.md`.
 
-5. Déjalo permanente:
+5. Déjalo permanente: **doble clic en `INSTALAR.cmd`**.
 
-   ```powershell
-   .\instalar.ps1
-   ```
-
-   Si dice que la ejecución de scripts está deshabilitada, corre antes
-   `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` (no pide administrador).
+   Ese archivo existe justo para esto. Una máquina recién puesta se topa con
+   dos muros —la política de scripts de PowerShell, y la marca de "vino de
+   internet" que Windows le pone a todo lo que llega en una USB o un ZIP, la
+   que hace que diga que el script no está firmado— y los resuelve los dos
+   solo.
 
 Al terminar quedan dos cosas: el agente **arranca solo al prender la
 computadora**, y en el escritorio hay un ícono **"Impresora Turkana"** con el
