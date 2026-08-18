@@ -266,20 +266,25 @@ export function PosSale({
           </div>
         </div>
 
-        {/* Categorías */}
+        {/* Categorías: una sola línea que se desliza. Envueltas en varios renglones
+            se comían media pantalla de productos, que es lo que hay que ver. */}
         {categories.length > 0 && (
-          <div className="mb-4 flex flex-wrap gap-2">
-            <button
-              onClick={() => setActiveCategory("")}
-              className={cn("rounded-full border px-4 py-2 text-sm transition-colors", !activeCategory ? "border-ink bg-ink text-cream" : "border-ink/15 bg-white text-ink hover:border-gold")}
-            >
-              Todos
-            </button>
+          <div className="mb-4 flex gap-2 overflow-x-auto pb-1.5 [scrollbar-width:thin]">
+            {/* "Todos" se queda fijo: quitar el filtro no debe obligar a regresar
+                la barra hasta el principio. */}
+            <div className="sticky left-0 z-10 shrink-0 bg-[#e6e2da] pr-2">
+              <button
+                onClick={() => setActiveCategory("")}
+                className={cn("whitespace-nowrap rounded-full border px-4 py-2 text-sm transition-colors", !activeCategory ? "border-ink bg-ink text-cream" : "border-ink/15 bg-white text-ink hover:border-gold")}
+              >
+                Todos
+              </button>
+            </div>
             {categories.map((c) => (
               <button
                 key={c.id}
                 onClick={() => setActiveCategory(c.id)}
-                className={cn("rounded-full border px-4 py-2 text-sm transition-colors", activeCategory === c.id ? "border-ink bg-ink text-cream" : "border-ink/15 bg-white text-ink hover:border-gold")}
+                className={cn("shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-sm transition-colors", activeCategory === c.id ? "border-ink bg-ink text-cream" : "border-ink/15 bg-white text-ink hover:border-gold")}
               >
                 {c.name}
               </button>
