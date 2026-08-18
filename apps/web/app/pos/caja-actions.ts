@@ -96,12 +96,13 @@ export async function registerCashEntry(input: {
     if (amount > totals.expectedCash) {
       return { ok: false, error: `En caja hay ${(totals.expectedCash / 100).toFixed(2)} en efectivo` };
     }
-    await db.from("expenses").insert({
-      session_id: input.sessionId, concept, amount_cents: amount, created_by: staff.id,
-    });
   }
 
-  await db.from("cash_movements").insert({
+  // El movimiento va PRIMERO y se revisa: es el que hace cuadrar el corte. Sin
+  // esta revisión, un rechazo de la base dejaba el gasto anotado en la tabla de
+  // gastos pero fuera del corte, y el efectivo esperado salía más alto que el
+  // contado sin que nadie supiera por qué.
+  const { error: movErr } = await db.from("cash_movements").insert({
     session_id: input.sessionId,
     type: input.kind === "gasto" ? "expense" : "in",
     method: "cash",
@@ -110,6 +111,13 @@ export async function registerCashEntry(input: {
     notes: concept,
     created_by: staff.id,
   });
+  if (movErr) return { ok: false, error: `Caja: ${movErr.message}` };
+
+  if (input.kind === "gasto") {
+    await db.from("expenses").insert({
+      session_id: input.sessionId, concept, amount_cents: amount, created_by: staff.id,
+    });
+  }
 
   revalidatePath("/pos");
   return {

@@ -1,10 +1,24 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { LogOut } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { REGISTER_COOKIE } from "@/lib/pos-register";
 import { logout } from "@/app/login/actions";
 import { PosBootstrap } from "@/components/pos/pos-bootstrap";
 
 export const metadata = { title: "Turkana POS" };
+
+// El nombre de la caja va en el encabezado: con dos equipos cobrando a la vez,
+// saber en cuál estás parado deja de ser un detalle.
+async function currentRegisterName(): Promise<string | null> {
+  const jar = await cookies();
+  const id = jar.get(REGISTER_COOKIE)?.value;
+  if (!id) return null;
+  const db = createAdminClient();
+  const { data } = await db.from("cash_registers").select("name").eq("id", id).maybeSingle();
+  return (data as { name: string } | null)?.name ?? null;
+}
 
 export default async function PosLayout({
   children,
@@ -12,13 +26,16 @@ export default async function PosLayout({
   children: React.ReactNode;
 }) {
   const staff = await requireStaff("/pos");
+  const registerName = await currentRegisterName();
 
   return (
     <div className="flex h-screen flex-col bg-[#e6e2da]">
       <header className="flex items-center justify-between bg-ink px-5 py-3 text-cream">
         <div className="flex flex-col leading-none">
           <span className="font-serif text-xl tracking-wide text-white">TURKANA</span>
-          <span className="mt-0.5 text-[10px] uppercase tracking-[0.3em] text-gold">POS</span>
+          <span className="mt-0.5 text-[10px] uppercase tracking-[0.3em] text-gold">
+            {registerName ?? "POS"}
+          </span>
         </div>
         <div className="flex items-center gap-4">
           <PosBootstrap />

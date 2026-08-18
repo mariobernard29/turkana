@@ -107,14 +107,17 @@ Versión 1 · Agosto 2026</p>
 <p>Antes de poder cobrar hay que abrir el turno de caja. Es lo primero del día.</p>
 <ol>
 <li>Entra a <strong>Punto de venta</strong>.</li>
-<li>Si no hay un turno abierto, aparece la pantalla <strong>Apertura de caja</strong>.</li>
-<li>Elige la <strong>Caja</strong> (si hay más de una).</li>
+<li>La primera vez que uses un equipo te pregunta <strong>¿Cuál caja es este equipo?</strong>. Elígela una sola vez: la computadora del mostrador es la <strong>Caja Principal</strong> y la tableta es la <strong>Caja iPad</strong>. Queda guardada y ya no vuelve a preguntar.</li>
+<li>Si esa caja no tiene turno abierto, aparece la pantalla <strong>Apertura de caja</strong> con el nombre de la caja arriba.</li>
 <li>Escribe el <strong>Fondo inicial (efectivo)</strong>: el dinero con el que arranca el cajón. Cuenta los billetes y monedas antes de escribirlo.</li>
 <li>Toca el botón para abrir.</li>
 </ol>
-<h3>Hay un solo turno para toda la tienda</h3>
-<p>Aunque haya varias personas atendiendo, <strong>el turno de caja es uno solo</strong>, porque el cajón de dinero es uno solo. Si tú llegas y alguien ya abrió la caja, el sistema te mete a ese mismo turno. Eso es correcto: así todo el dinero cobrado en el día entra en el mismo corte, sin importar quién cobró.</p>
-<p>No abras y cierres la caja cada vez que cambia la persona en el mostrador. La caja se abre en la mañana y se cierra en la noche.</p>
+<p>Arriba, junto al nombre TURKANA, siempre se ve <strong>en qué caja estás parado</strong>.</p>
+<h3>Cada caja lleva su propio dinero</h3>
+<p>La computadora y la tableta pueden cobrar <strong>al mismo tiempo</strong>, cada una con su turno abierto. Son dos cajones distintos, así que cada una tiene su propio <strong>fondo inicial</strong>, su propio <strong>corte</strong> al final del día y su propio <strong>efectivo esperado</strong>.</p>
+<p>El dinero de una caja <strong>nunca</strong> se mezcla con el de la otra. Por eso cada equipo hace su corte por separado, y cada corte manda su propio correo.</p>
+<p>Si varias personas se turnan en el <strong>mismo</strong> equipo durante el día, eso no es una caja nueva: el turno se abre en la mañana y se cierra en la noche. Para cambiar de cajero sin cerrar, usa el <strong>precorte</strong>.</p>
+<p><strong>Nunca uses la misma caja en dos equipos.</strong> Si la computadora y la tableta eligen la misma, comparten fondo y corte, y el efectivo deja de cuadrar.</p>
 <hr>
 <h2>4. Vender</h2>
 <p>La pantalla de venta tiene dos partes: los <strong>productos</strong> a la izquierda y el <strong>ticket</strong> a la derecha.</p>
@@ -186,6 +189,19 @@ Versión 1 · Agosto 2026</p>
 <p>Al cobrar sale la pantalla <strong>Venta realizada</strong> con el ticket. Desde ahí lo imprimes o se lo mandas al cliente.</p>
 <p>El ticket trae el desglose de <strong>Subtotal</strong>, <strong>Descuento</strong> (si hubo), <strong>IVA (16%)</strong> y <strong>Total</strong>, además del folio de la venta.</p>
 <p><strong>Imprime siempre el ticket del cliente.</strong> Si la impresora falla, la venta ya quedó registrada de todos modos: puedes volver a imprimirla después desde el panel, en <strong>Ventas</strong>.</p>
+<h3>La impresión sale sola</h3>
+<p>Al tocar <strong>Imprimir ticket</strong> el papel sale directo: ya no aparece la ventana de impresión del navegador. Los tickets de las dos cajas salen en la misma impresora del mostrador, así que <strong>lo que cobres en la tableta se imprime en el mostrador</strong>.</p>
+<p>Arriba, junto al indicador de conexión, hay un ícono de impresora que dice cómo va:</p>
+<table>
+<thead><tr><th>Cómo se ve</th><th>Qué significa</th></tr></thead>
+<tbody>
+<tr><td>Verde</td><td>Todo bien.</td></tr>
+<tr><td>Verde con número</td><td>Hay tickets saliendo en este momento.</td></tr>
+<tr><td>Ámbar «Sin impresora»</td><td>La impresora no contesta. Los tickets <strong>no se pierden</strong>: vuelve a aparecer la ventana de impresión del navegador de siempre.</td></tr>
+<tr><td>Rojo con número</td><td>Tickets que no se pudieron imprimir. Casi siempre es papel o la impresora apagada.</td></tr>
+</tbody>
+</table>
+<p>Cuando esté en rojo: pon papel o enciende la impresora, y vuelve a mandar esos tickets desde <strong>Ajustes → Impresoras</strong>.</p>
 <hr>
 <h2>7. Descuentos</h2>
 <p>Todo lo que sigue (descuentos, servicios, apartados, cambios, resguardo y corte) sale del botón <strong>Menú</strong>, arriba a la derecha del buscador:</p>
@@ -617,6 +633,14 @@ No hay categorías dadas de alta todavía. No impide vender.</p>
 Si dice <em>&quot;Producto no encontrado&quot;</em>, esa pieza ya no existe en el catálogo. Recarga la pantalla; si sigue apareciendo, avisa.</p>
 <p><strong>Dice que no hay stock suficiente.</strong>
 Otra pantalla vendió la última pieza antes que tú. Cuenta físicamente y ajusta el inventario.</p>
+<p><strong>No sale el ticket y el ícono de impresora está en ámbar.</strong>
+La impresora del mostrador no contesta. Revisa que esté encendida, con papel y conectada a la red, y que la computadora del mostrador esté prendida. Mientras tanto los tickets salen por la ventana de impresión del navegador: no se pierde ninguno.</p>
+<p><strong>El ícono de impresora está en rojo.</strong>
+Hay tickets que no se pudieron imprimir, casi siempre por papel o porque la impresora estaba apagada. Arréglalo y vuelve a mandarlos desde <strong>Ajustes → Impresoras</strong>.</p>
+<p><strong>Cobré en la tableta y no encuentro el ticket.</strong>
+Salió en la impresora del mostrador: las dos cajas imprimen en la misma.</p>
+<p><strong>El equipo dice que no tiene caja asignada.</strong>
+Elige la caja que le toca en la pantalla que aparece. La computadora del mostrador es la <strong>Caja Principal</strong> y la tableta es la <strong>Caja iPad</strong>. Nunca las dos en la misma.</p>
 <p><strong>La diferencia del corte no cuadra.</strong>
 Vuelve a contar. Revisa que hayas registrado los resguardos. Si sigue sin cuadrar, <strong>anota el número real</strong> y avisa: no lo maquilles.</p>
 <p><strong>La etiqueta dice &quot;Sin conexión&quot;.</strong>

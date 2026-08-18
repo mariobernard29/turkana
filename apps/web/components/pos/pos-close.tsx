@@ -6,7 +6,7 @@ import { X, Loader2, Printer } from "lucide-react";
 import { getSessionTotals, closeSession } from "@/app/pos/actions";
 import { getOpenSessionInfo } from "@/app/pos/corte-actions";
 import type { OpenSession } from "@/lib/cash-report";
-import { printReceiptHTML } from "@/lib/print";
+import { printReceipt } from "@/lib/print-direct";
 import type { ReceiptData } from "@/lib/escpos";
 import { formatMXN, cn } from "@/lib/utils";
 import { expectedPairs, summaryPairs, type CashTotals } from "@/lib/cash";
@@ -90,7 +90,7 @@ export function PosClose({
             </p>
             {receipt && (
               <button
-                onClick={() => printReceiptHTML(receipt)}
+                onClick={() => void printReceipt(receipt)}
                 className="mt-8 flex w-full items-center justify-center gap-2 rounded-full border border-ink/15 py-3 text-sm text-ink hover:border-gold"
               >
                 <Printer className="h-4 w-4" /> Imprimir corte

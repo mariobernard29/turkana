@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Truck, Users, ShieldCheck, ImageIcon, Mail, ChevronRight } from "lucide-react";
+import { Truck, Users, ShieldCheck, ImageIcon, Mail, ChevronRight, Calculator, Printer } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +10,8 @@ type Card = { href: string; title: string; desc: string; icon: typeof Truck; adm
 const CARDS: Card[] = [
   { href: "/admin/ajustes/negocio", title: "Negocio", desc: "Envíos, límite de caja y alertas por correo.", icon: Truck, adminOnly: true },
   { href: "/admin/ajustes/contenido", title: "Contenido de inicio", desc: "Carrusel principal (hero) y banners promocionales.", icon: ImageIcon, adminOnly: true },
+  { href: "/admin/ajustes/cajas", title: "Cajas y equipos", desc: "Puntos de cobro y qué equipo es cada uno.", icon: Calculator, adminOnly: true },
+  { href: "/admin/ajustes/impresoras", title: "Impresoras", desc: "Impresión de tickets y cola de impresión.", icon: Printer, adminOnly: true },
   { href: "/admin/ajustes/usuarios", title: "Usuarios", desc: "Personal, altas y roles del sistema.", icon: Users, adminOnly: true },
   { href: "/admin/ajustes/permisos", title: "Permisos", desc: "Qué puede hacer cada rol.", icon: ShieldCheck, adminOnly: true },
   { href: "/admin/ajustes/correo", title: "Correo", desc: "Prueba el envío de correos (Resend).", icon: Mail, adminOnly: false },

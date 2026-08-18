@@ -1,0 +1,14 @@
+{
+  "name": "turkana-print-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Recoge los tickets de la cola y los imprime en la térmica de la tienda",
+  "scripts": {
+    "start": "node agent.mjs",
+    "prueba": "node agent.mjs --test"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4"
+  }
+}

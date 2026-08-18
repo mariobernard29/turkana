@@ -6,7 +6,7 @@ import { Loader2, Trash2 } from "lucide-react";
 import { createLayawayFromCart } from "@/app/pos/account-actions";
 import { CustomerSearch } from "@/components/pos/customer-search";
 import type { PosCustomer } from "@/app/pos/customer-actions";
-import { printReceiptHTML } from "@/lib/print";
+import { printReceipt } from "@/lib/print-direct";
 import { POS_METHODS } from "@/lib/payments";
 import { formatMXN } from "@/lib/utils";
 
@@ -55,7 +55,7 @@ export function LayawayModal({
     });
     setBusy(false);
     if (!res.ok) { setError(res.error ?? "No se pudo apartar"); return; }
-    if (res.comprobante) printReceiptHTML(res.comprobante);
+    if (res.comprobante) await printReceipt(res.comprobante);
     onDone();
   };
 

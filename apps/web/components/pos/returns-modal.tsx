@@ -4,7 +4,7 @@ import { useState } from "react";
 import { X, Loader2, Printer } from "lucide-react";
 import { registerExchange } from "@/app/pos/caja-actions";
 import type { PosVariant } from "@/components/pos/pos-sale";
-import { printReceiptHTML } from "@/lib/print";
+import { printReceipt } from "@/lib/print-direct";
 import { VariantSearch } from "@/components/pos/variant-search";
 import { formatMXN } from "@/lib/utils";
 import { POS_METHODS } from "@/lib/payments";
@@ -32,7 +32,7 @@ export function ReturnsModal({
     const res = await registerExchange({ sessionId, returnVariantId: oldV, newVariantId: newV, qty: Number(qty), reason, method });
     setBusy(false);
     if (!res.ok) { setMsg({ k: "err", t: res.error ?? "Error" }); return; }
-    if (res.comprobante) printReceiptHTML(res.comprobante);
+    if (res.comprobante) await printReceipt(res.comprobante, { sessionId });
     const diff = res.difference ?? 0;
     setMsg({ k: "ok", t: diff > 0 ? `Cambio hecho · cobrar ${formatMXN(diff)}` : diff < 0 ? `Cambio hecho · reembolsar ${formatMXN(-diff)}` : "Cambio hecho · sin diferencia" });
     setOldV(""); setNewV(""); setQty("1"); setReason("");

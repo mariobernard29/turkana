@@ -26,9 +26,10 @@ export async function loadSessionTotals(db: DB, sessionId: string): Promise<Cash
 }
 
 // ── Turnos abiertos ──────────────────────────────────────────────────────────
-// El turno es POR CAJERO: si dos personas usan el POS, cada una corta el suyo.
-// Sin esta lista era imposible notar que había dinero en el turno de alguien más.
+// El turno es POR CAJA: el mostrador y el iPad tienen cajón, fondo y corte
+// propios. Sin esta lista era imposible notar que quedó dinero en otra caja.
 export type OpenSession = {
+  registerId: string;
   id: string;
   lote: string;
   cashier: string;
@@ -41,11 +42,11 @@ export type OpenSession = {
 export async function loadOpenSessions(db: DB): Promise<OpenSession[]> {
   const { data } = await db
     .from("cash_sessions")
-    .select("id, opened_at, opening_float_cents, cashier_id, cash_registers(name)")
+    .select("id, opened_at, opening_float_cents, cashier_id, register_id, cash_registers(name)")
     .eq("status", "open")
     .order("opened_at", { ascending: true });
   const sessions = (data as unknown as {
-    id: string; opened_at: string; opening_float_cents: number; cashier_id: string | null;
+    id: string; opened_at: string; opening_float_cents: number; cashier_id: string | null; register_id: string;
     cash_registers: { name: string } | { name: string }[] | null;
   }[]) ?? [];
   if (!sessions.length) return [];
@@ -71,6 +72,7 @@ export async function loadOpenSessions(db: DB): Promise<OpenSession[]> {
     const totals = computeCashTotals(s.opening_float_cents, bySession.get(s.id) ?? []);
     return {
       id: s.id,
+      registerId: s.register_id,
       lote: s.id.slice(0, 8),
       cashier: s.cashier_id ? names.get(s.cashier_id) ?? "—" : "—",
       registerName: one(s.cash_registers)?.name ?? "Caja",

@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { requireStaff } from "@/lib/auth";
+import { REGISTER_COOKIE, REGISTER_COOKIE_MAX_AGE } from "@/lib/pos-register";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkLowStockAfterSale, notifyCashCut } from "@/lib/admin-alerts";
 import type { PaymentMethod } from "@/lib/payments";
@@ -15,34 +17,95 @@ import type { ReceiptData } from "@/lib/escpos";
 type DB = ReturnType<typeof createAdminClient>;
 const TAX_RATE = 0.16;
 
+// ── Caja del equipo ──────────────────────────────────────────────────────────
+// Cada equipo (la PC del mostrador, el iPad) se amarra a una caja y ahí se queda.
+// La cookie es la que lee el server component del POS; el cliente la espeja en
+// localStorage para poder seguir sabiéndolo sin red.
+export async function selectRegister(registerId: string): Promise<{ ok: boolean; error?: string }> {
+  await requireStaff();
+  const db = createAdminClient();
+
+  const { data } = await db
+    .from("cash_registers").select("id").eq("id", registerId).eq("is_active", true).maybeSingle();
+  if (!data) return { ok: false, error: "Esa caja ya no existe" };
+
+  const jar = await cookies();
+  jar.set(REGISTER_COOKIE, registerId, {
+    path: "/", maxAge: REGISTER_COOKIE_MAX_AGE, sameSite: "lax",
+  });
+
+  revalidatePath("/pos");
+  return { ok: true };
+}
+
+export async function forgetRegister(): Promise<{ ok: boolean }> {
+  await requireStaff();
+  const jar = await cookies();
+  jar.delete(REGISTER_COOKIE);
+  revalidatePath("/pos");
+  return { ok: true };
+}
+
+// Deja rastro de qué equipo es cuál y a qué caja pertenece: sin esto la lista de
+// equipos del admin son puros UUID sin dueño.
+async function registerDevice(
+  db: DB,
+  input: { registerId: string; deviceId?: string; deviceName?: string; platform?: string },
+) {
+  if (!input.deviceId) return;
+  await db.from("devices").upsert(
+    {
+      id: input.deviceId,
+      name: input.deviceName || "POS",
+      platform: input.platform || "web",
+      register_id: input.registerId,
+      last_seen_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
+}
+
 // ── Apertura de caja ─────────────────────────────────────────────────────────
 export async function openSession(input: {
   registerId: string;
   openingFloatPesos: number;
+  deviceId?: string;
+  deviceName?: string;
+  platform?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const staff = await requireStaff();
   const db = createAdminClient();
 
-  // Un solo turno a la vez para toda la tienda (el cajón es uno). Si ya hay uno
-  // abierto —lo haya abierto quien sea— se sigue usando ese.
+  if (!input.registerId) return { ok: false, error: "Este equipo no tiene caja asignada" };
+
+  // Un turno por CAJA, no uno por tienda: el mostrador y el iPad tienen cajón,
+  // fondo y corte propios. Si esta caja ya tiene turno abierto —lo haya abierto
+  // quien sea— se sigue usando ese.
   const { data: existing } = await db
-    .from("cash_sessions").select("id").eq("status", "open")
-    .order("opened_at", { ascending: true }).limit(1).maybeSingle();
-  if (existing) return { ok: true };
+    .from("cash_sessions").select("id")
+    .eq("register_id", input.registerId).eq("status", "open")
+    .maybeSingle();
+  if (existing) {
+    await registerDevice(db, input);
+    return { ok: true };
+  }
 
   const { error } = await db.from("cash_sessions").insert({
     register_id: input.registerId,
     cashier_id: staff.id,
+    device_id: input.deviceId || null,
     opening_float_cents: Math.round((input.openingFloatPesos || 0) * 100),
     status: "open",
   });
-  // El índice único de la BD evita dos turnos si alguien abre desde otro equipo
-  // al mismo tiempo; en ese caso ya hay turno y se continúa con él.
+  // El índice único parcial (register_id, status='open') evita dos turnos en la
+  // misma caja si dos equipos la abren al mismo tiempo; en ese caso ya hay turno
+  // y se continúa con él.
   if (error) {
     if (error.code === "23505") return { ok: true };
     return { ok: false, error: error.message };
   }
 
+  await registerDevice(db, input);
   revalidatePath("/pos");
   return { ok: true };
 }
@@ -70,6 +133,7 @@ export type CreditInput = { dueDate?: string; authorizedBy?: string; notes?: str
 type ServiceInput = { concept: string; description?: string; amountCents: number };
 type SaleInput = {
   sessionId: string;
+  deviceId?: string; // desde qué equipo se cobró
   items: { variantId: string; qty: number }[];
   services?: ServiceInput[];
   payments: PaymentSplit[];
@@ -211,6 +275,7 @@ async function applySale(
       discount_cents: discountCents,
       notes: discountCents > 0 ? `Descuento ${input.discount?.concept ?? ""} — autorizó ${input.discount?.authorizedBy ?? ""}`.trim() : null,
       cash_session_id: input.sessionId,
+      device_id: input.deviceId || null,
       created_by: staffId,
     })
     .select("id, order_number").single();
@@ -326,15 +391,37 @@ export type SyncResult = {
   results: { clientOpId: string; status: "synced" | "conflict" | "error"; orderNumber?: string; error?: string }[];
 };
 
+// El turno al que debe entrar una venta que estuvo guardada sin red. Si el que
+// traía congelado ya cerró, se manda al turno abierto de LA MISMA caja: el corte
+// viejo ya se imprimió y se mandó por correo, no se puede tocar.
+async function resolveSyncSession(
+  db: DB,
+  sessionId: string,
+): Promise<{ id: string; moved: boolean } | null> {
+  const { data } = await db
+    .from("cash_sessions").select("id, status, register_id").eq("id", sessionId).maybeSingle();
+  const sess = data as { id: string; status: string; register_id: string } | null;
+  if (!sess) return null;
+  if (sess.status === "open") return { id: sess.id, moved: false };
+
+  const { data: openData } = await db
+    .from("cash_sessions").select("id")
+    .eq("register_id", sess.register_id).eq("status", "open").maybeSingle();
+  const open = openData as { id: string } | null;
+  return open ? { id: open.id, moved: true } : null;
+}
+
 export async function processSyncBatch(deviceId: string, ops: SyncOp[]): Promise<SyncResult> {
   const staff = await requireStaff();
   const db = createAdminClient();
 
-  // Registrar el dispositivo (FK de sync_queue).
+  // Registrar el dispositivo (FK de sync_queue). Con ignoreDuplicates para no
+  // pisar el nombre, la plataforma y la caja que dejó la apertura de turno.
   await db.from("devices").upsert(
     { id: deviceId, name: "POS", platform: "web", last_seen_at: new Date().toISOString() },
-    { onConflict: "id" },
+    { onConflict: "id", ignoreDuplicates: true },
   );
+  await db.from("devices").update({ last_seen_at: new Date().toISOString() }).eq("id", deviceId);
 
   const results: SyncResult["results"] = [];
   for (const op of ops) {
@@ -354,11 +441,37 @@ export async function processSyncBatch(deviceId: string, ops: SyncOp[]): Promise
       continue;
     }
 
+    const target = await resolveSyncSession(db, op.sessionId);
+    if (!target) {
+      await db.from("sync_queue")
+        .update({ status: "conflict", error: "El turno ya cerró y su caja no tiene turno abierto", processed_at: new Date().toISOString() })
+        .eq("device_id", deviceId).eq("client_op_id", op.clientOpId);
+      await db.from("notifications").insert({
+        type: "sync_conflict",
+        title: "Venta offline sin turno",
+        body: "Una venta guardada sin conexión no se pudo aplicar: su turno ya cerró y esa caja no tiene turno abierto. Abre la caja y vuelve a sincronizar.",
+        data: { client_op_id: op.clientOpId, device_id: deviceId, session_id: op.sessionId },
+        target_role: "gerente",
+      });
+      results.push({ clientOpId: op.clientOpId, status: "conflict", error: "El turno ya cerró y su caja no tiene turno abierto" });
+      continue;
+    }
+
     const res = await applySale(db, staff.id, {
-      sessionId: op.sessionId, items: op.items, services: op.services,
+      sessionId: target.id, deviceId, items: op.items, services: op.services,
       payments: op.payments, customerId: op.customerId, discount: op.discount,
     });
     const status: "synced" | "conflict" | "error" = res.ok ? "synced" : res.conflict ? "conflict" : "error";
+
+    if (res.ok && target.moved) {
+      await db.from("notifications").insert({
+        type: "sync_conflict",
+        title: "Venta offline movida de turno",
+        body: `La venta ${res.ticket?.orderNumber ?? ""} se guardó sin conexión en un turno que ya cerró; entró al turno abierto de esa misma caja.`.trim(),
+        data: { client_op_id: op.clientOpId, device_id: deviceId, from_session: op.sessionId, to_session: target.id },
+        target_role: "gerente",
+      });
+    }
 
     await db.from("sync_queue")
       .update({ status, error: res.error ?? null, processed_at: new Date().toISOString() })

@@ -11,7 +11,7 @@ import {
 } from "@/app/pos/account-actions";
 import { CustomerSearch } from "@/components/pos/customer-search";
 import type { PosCustomer } from "@/app/pos/customer-actions";
-import { printReceiptHTML } from "@/lib/print";
+import { printReceipt } from "@/lib/print-direct";
 import type { ReceiptData } from "@/lib/escpos";
 import { formatMXN, cn } from "@/lib/utils";
 import { POS_METHODS } from "@/lib/payments";
@@ -47,7 +47,7 @@ export function AccountsPanel({
     const res = await fn();
     setBusy(false);
     if (!res.ok) { setMsg({ k: "err", t: res.error ?? "Error" }); return false; }
-    if (res.comprobante) printReceiptHTML(res.comprobante);
+    if (res.comprobante) await printReceipt(res.comprobante, { sessionId });
     setMsg({ k: "ok", t: okMsg });
     await reload(q);
     return true;

@@ -57,11 +57,40 @@ async function sessionIsOpen(db: ReturnType<typeof createAdminClient>, sessionId
   return (data as { status: string } | null)?.status === "open";
 }
 
-async function currentOpenSession(db: ReturnType<typeof createAdminClient>) {
-  const { data } = await db
-    .from("cash_sessions").select("id").eq("status", "open")
-    .order("opened_at", { ascending: false }).limit(1).maybeSingle();
-  return (data as { id: string } | null)?.id ?? null;
+// Caja donde debe caer el reembolso de una venta cuyo turno ya cerró. Con dos
+// cajas cobrando no vale tomar "la última abierta": el dinero salió de un cajón
+// concreto y ahí tiene que volver a descontarse.
+async function refundSession(
+  db: ReturnType<typeof createAdminClient>,
+  saleSessionId: string | null,
+): Promise<{ id: string } | { error: string }> {
+  const { data: origData } = saleSessionId
+    ? await db.from("cash_sessions").select("register_id").eq("id", saleSessionId).maybeSingle()
+    : { data: null };
+  const registerId = (origData as { register_id: string } | null)?.register_id ?? null;
+
+  if (registerId) {
+    const { data } = await db
+      .from("cash_sessions").select("id")
+      .eq("register_id", registerId).eq("status", "open").maybeSingle();
+    const own = (data as { id: string } | null)?.id;
+    if (own) return { id: own };
+
+    const { data: regData } = await db
+      .from("cash_registers").select("name").eq("id", registerId).maybeSingle();
+    const name = (regData as { name: string } | null)?.name ?? "esa caja";
+    return { error: `El turno de esta venta ya se cerró. Abre ${name} para registrar la salida del dinero.` };
+  }
+
+  // Venta sin turno identificable: si hay exactamente una caja abierta, se usa;
+  // con varias no hay forma de adivinar y es mejor no descuadrar ninguna.
+  const { data } = await db.from("cash_sessions").select("id").eq("status", "open");
+  const open = (data as { id: string }[] | null) ?? [];
+  if (open.length === 1) return { id: open[0].id };
+  if (open.length === 0) {
+    return { error: "El turno de esta venta ya se cerró. Abre una caja para poder registrar la salida del dinero." };
+  }
+  return { error: "Hay varias cajas abiertas y esta venta no dice de cuál salió. Regístralo como devolución desde el POS." };
 }
 
 // ── Cancelar venta ───────────────────────────────────────────────────────────
@@ -90,13 +119,9 @@ export async function cancelSale(
   // Turno cerrado con dinero por devolver: hace falta una caja abierta hoy.
   let refundSessionId: string | null = null;
   if (!openTurn && refundTotal > 0) {
-    refundSessionId = await currentOpenSession(db);
-    if (!refundSessionId) {
-      return {
-        ok: false,
-        error: "El turno de esta venta ya se cerró. Abre una caja para poder registrar la salida del dinero.",
-      };
-    }
+    const target = await refundSession(db, order.cash_session_id);
+    if ("error" in target) return { ok: false, error: target.error };
+    refundSessionId = target.id;
   }
 
   // 1) Dinero

@@ -20,6 +20,7 @@ import { CashEntryModal } from "@/components/pos/cash-entry-modal";
 import { PaymentCalculator } from "@/components/pos/payment-calculator";
 import { useOnline } from "@/components/pos/use-online";
 import { cacheProducts, getCachedProducts, enqueueSale, type CachedProduct } from "@/lib/offline/db";
+import { getDeviceId } from "@/lib/offline/device";
 
 export type PosSize = { variantId: string; talla: string; priceCents: number; stock: number; lowThreshold: number };
 export type PosProduct = {
@@ -206,7 +207,7 @@ export function PosSale({
     if (!online) { await saveOffline(); return; }
 
     try {
-      const res = await chargeSale({ sessionId: session.id, items, services, payments, customerId: attached?.id, discount: discountPayload, credit: extra?.credit });
+      const res = await chargeSale({ sessionId: session.id, deviceId: getDeviceId(), items, services, payments, customerId: attached?.id, discount: discountPayload, credit: extra?.credit });
       if (!res.ok) { setError(res.error ?? "Error al cobrar"); setBusy(false); return; }
       finishTicket(res.ticket ?? localTicket);
       setBusy(false);

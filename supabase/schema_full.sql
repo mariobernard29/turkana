@@ -1800,3 +1800,140 @@ drop policy if exists "staff read tickets" on storage.objects;
 create policy "staff read tickets" on storage.objects
   for select using (bucket_id = 'tickets' and is_staff());
 
+
+
+-- ====================================================================
+-- migrations/0028_dos_cajas.sql
+-- ====================================================================
+
+-- 0028_dos_cajas.sql
+-- Dos cajas cobrando al mismo tiempo: la PC del mostrador y un iPad.
+--
+-- La migración 0023 puso un candado global —a lo más UN turno abierto en toda la
+-- tienda— porque el turno era por cajero y el corte de uno no veía el dinero del
+-- otro. Ese candado resolvió aquello pero impide lo que ahora hace falta: dos
+-- cajones, dos fondos y dos cortes independientes. La regla correcta no es "un
+-- turno en la tienda" sino "un turno POR CAJA", y eso es lo que se cambia aquí.
+--
+-- Pega y ejecuta en: Supabase → SQL Editor. Idempotente: se puede correr varias veces.
+
+-- ── 1) Cajas: nombre único y bandera de activa ──────────────────────────────
+-- El alta de cajas pasa a hacerse desde el admin, así que el nombre tiene que
+-- ser único (si no, "Caja iPad" duplicada y nadie sabe cuál es cuál). Antes de
+-- crear el índice se borran duplicados que nunca se usaron.
+alter table cash_registers add column if not exists is_active boolean not null default true;
+
+delete from cash_registers r
+ where not exists (select 1 from cash_sessions s where s.register_id = r.id)
+   and exists (
+     select 1 from cash_registers otra
+      where otra.name = r.name and otra.id <> r.id and otra.created_at < r.created_at
+   );
+
+create unique index if not exists cash_registers_name_key on cash_registers (name);
+
+-- ── 2) El candado pasa de la tienda a la caja ───────────────────────────────
+drop index if exists cash_sessions_one_open;
+
+create unique index if not exists cash_sessions_one_open_per_register
+  on cash_sessions (register_id) where status = 'open';
+
+-- ── 3) La segunda caja ──────────────────────────────────────────────────────
+insert into cash_registers (name, location_id)
+select 'Caja iPad', l.id
+  from inventory_locations l
+ where l.key = 'tienda'
+   and not exists (select 1 from cash_registers r where r.name = 'Caja iPad');
+
+-- ── 4) Gastos e ingresos de caja: el CHECK los estaba tirando ───────────────
+-- registerCashEntry inserta cash_movements con reference_type = 'manual', que no
+-- estaba en la lista permitida por 0021. El insert fallaba sin que nadie lo
+-- revisara: el gasto quedaba en la tabla `expenses` pero jamás llegaba al corte,
+-- así que el efectivo esperado salía más alto que el contado.
+alter table cash_movements drop constraint if exists cash_movements_reference_type_check;
+alter table cash_movements add constraint cash_movements_reference_type_check
+  check (reference_type is null or reference_type in ('order','layaway','credit','other','manual'));
+
+-- ── 5) Índice que faltaba ───────────────────────────────────────────────────
+-- Todos los reportes de corte filtran orders por cash_session_id y no había
+-- índice. Con dos cajas se consulta el doble.
+create index if not exists orders_cash_session_idx on orders (cash_session_id);
+
+
+-- ====================================================================
+-- migrations/0029_impresion.sql
+-- ====================================================================
+
+-- 0029_impresion.sql
+-- Impresión directa de tickets: se acabó el diálogo del navegador.
+--
+-- El sistema vive en la nube y la impresora vive en la tienda, así que el
+-- servidor no puede hablarle: no hay ruta de red entre Vercel y la IP local de
+-- la POS895. Y desde el navegador tampoco —no existen sockets TCP crudos, y en
+-- el iPad Safari bloquea cualquier llamada a http://192.168.x.x desde una página
+-- https. La salida es invertir el sentido: la venta deja el ticket en una cola
+-- aquí, y un agente que corre en la PC del mostrador —el único que sí alcanza la
+-- impresora— lo recoge por Realtime y lo vuelca al puerto 9100.
+--
+-- Pega y ejecuta en: Supabase → SQL Editor. Idempotente: se puede correr varias veces.
+
+-- ── Impresoras ──────────────────────────────────────────────────────────────
+create table if not exists printers (
+  id           uuid primary key default gen_random_uuid(),
+  name         text not null,
+  host         text not null,                    -- IP fija de la impresora en la tienda
+  port         int  not null default 9100,       -- puerto de impresión cruda
+  register_id  uuid references cash_registers(id), -- null = la usan todas las cajas
+  is_default   boolean not null default false,
+  last_seen_at timestamptz,                      -- latido del agente que la atiende
+  is_active    boolean not null default true,
+  created_at   timestamptz not null default now()
+);
+
+-- ── Cola de impresión ───────────────────────────────────────────────────────
+-- El payload son los bytes ESC/POS ya armados por la app, en base64. El agente
+-- no sabe nada del diseño del ticket: sólo mueve bytes. Así, cambiar un ticket
+-- se despliega con la app y no obliga a actualizar la PC de la tienda.
+create table if not exists print_jobs (
+  id          uuid primary key default gen_random_uuid(),
+  printer_id  uuid not null references printers(id),
+  doc_type    text not null,                     -- sale, corte, apartado, abono...
+  label       text,                              -- 'Ticket A-000123', para la pantalla
+  payload     text not null,                     -- ESC/POS en base64
+  status      text not null default 'pending'
+    check (status in ('pending','printing','done','error')),
+  attempts    int  not null default 0,
+  error       text,
+  session_id  uuid,
+  created_by  uuid references auth.users(id),
+  created_at  timestamptz not null default now(),
+  claimed_at  timestamptz,
+  printed_at  timestamptz
+);
+create index if not exists print_jobs_queue_idx on print_jobs (printer_id, status, created_at);
+
+-- ── Permisos ────────────────────────────────────────────────────────────────
+-- El agente entra con un usuario de staff propio, no con la llave de servicio:
+-- una PC de mostrador no es lugar para la service_role key.
+alter table printers   enable row level security;
+alter table print_jobs enable row level security;
+
+drop policy if exists "printers_staff"   on printers;
+drop policy if exists "print_jobs_staff" on print_jobs;
+create policy "printers_staff"   on printers   for all using (is_staff()) with check (is_staff());
+create policy "print_jobs_staff" on print_jobs for all using (is_staff()) with check (is_staff());
+
+-- ── Realtime ────────────────────────────────────────────────────────────────
+-- Sin esto el agente tendría que preguntar en bucle y el ticket saldría tarde.
+do $$
+begin
+  alter publication supabase_realtime add table print_jobs;
+exception when duplicate_object then null;
+end $$;
+
+-- ── La impresora del mostrador ──────────────────────────────────────────────
+-- Se deja dada de alta con una IP de ejemplo; hay que corregirla en
+-- Admin → Ajustes → Impresoras con la IP real de la POS895.
+insert into printers (name, host, port, is_default)
+select 'POS895 mostrador', '192.168.1.100', 9100, true
+ where not exists (select 1 from printers);

@@ -86,16 +86,26 @@ Al terminar tu turno, **cierra sesión**. Si dejas la sesión abierta, la siguie
 Antes de poder cobrar hay que abrir el turno de caja. Es lo primero del día.
 
 1. Entra a **Punto de venta**.
-2. Si no hay un turno abierto, aparece la pantalla **Apertura de caja**.
-3. Elige la **Caja** (si hay más de una).
+2. La primera vez que uses un equipo te pregunta **¿Cuál caja es este equipo?**. Elígela una sola vez: la computadora del mostrador es la **Caja Principal** y la tableta es la **Caja iPad**. Queda guardada y ya no vuelve a preguntar.
+3. Si esa caja no tiene turno abierto, aparece la pantalla **Apertura de caja** con el nombre de la caja arriba.
 4. Escribe el **Fondo inicial (efectivo)**: el dinero con el que arranca el cajón. Cuenta los billetes y monedas antes de escribirlo.
 5. Toca el botón para abrir.
 
-### Hay un solo turno para toda la tienda
+Arriba, junto al nombre TURKANA, siempre se ve **en qué caja estás parado**.
 
-Aunque haya varias personas atendiendo, **el turno de caja es uno solo**, porque el cajón de dinero es uno solo. Si tú llegas y alguien ya abrió la caja, el sistema te mete a ese mismo turno. Eso es correcto: así todo el dinero cobrado en el día entra en el mismo corte, sin importar quién cobró.
+### Cada caja lleva su propio dinero
 
-No abras y cierres la caja cada vez que cambia la persona en el mostrador. La caja se abre en la mañana y se cierra en la noche.
+La computadora y la tableta pueden cobrar **al mismo tiempo**, cada una con su turno abierto. Son dos cajones distintos, así que cada una tiene:
+
+- su propio **fondo inicial**,
+- su propio **corte** al final del día,
+- su propio **efectivo esperado**.
+
+El dinero de una caja **nunca** se mezcla con el de la otra. Por eso cada equipo hace su corte por separado, y cada corte manda su propio correo.
+
+Si varias personas se turnan en el **mismo** equipo durante el día, eso no es una caja nueva: el turno se abre en la mañana y se cierra en la noche. Para cambiar de cajero sin cerrar, usa el **precorte**.
+
+**Nunca uses la misma caja en dos equipos.** Si la computadora y la tableta eligen la misma, comparten fondo y corte, y el efectivo deja de cuadrar.
 
 ---
 
@@ -176,6 +186,21 @@ Al cobrar sale la pantalla **Venta realizada** con el ticket. Desde ahí lo impr
 El ticket trae el desglose de **Subtotal**, **Descuento** (si hubo), **IVA (16%)** y **Total**, además del folio de la venta.
 
 **Imprime siempre el ticket del cliente.** Si la impresora falla, la venta ya quedó registrada de todos modos: puedes volver a imprimirla después desde el panel, en **Ventas**.
+
+### La impresión sale sola
+
+Al tocar **Imprimir ticket** el papel sale directo: ya no aparece la ventana de impresión del navegador. Los tickets de las dos cajas salen en la misma impresora del mostrador, así que **lo que cobres en la tableta se imprime en el mostrador**.
+
+Arriba, junto al indicador de conexión, hay un ícono de impresora que dice cómo va:
+
+| Cómo se ve | Qué significa |
+|---|---|
+| Verde | Todo bien. |
+| Verde con número | Hay tickets saliendo en este momento. |
+| Ámbar "Sin impresora" | La impresora no contesta. Los tickets **no se pierden**: vuelve a aparecer la ventana de impresión del navegador de siempre. |
+| Rojo con número | Tickets que no se pudieron imprimir. Casi siempre es papel o la impresora apagada. |
+
+Cuando esté en rojo: pon papel o enciende la impresora, y vuelve a mandar esos tickets desde **Ajustes → Impresoras**.
 
 ---
 
@@ -576,6 +601,18 @@ Si dice *"Producto no encontrado"*, esa pieza ya no existe en el catálogo. Reca
 
 **Dice que no hay stock suficiente.**
 Otra pantalla vendió la última pieza antes que tú. Cuenta físicamente y ajusta el inventario.
+
+**No sale el ticket y el ícono de impresora está en ámbar.**
+La impresora del mostrador no contesta. Revisa que esté encendida, con papel y conectada a la red, y que la computadora del mostrador esté prendida. Mientras tanto los tickets salen por la ventana de impresión del navegador: no se pierde ninguno.
+
+**El ícono de impresora está en rojo.**
+Hay tickets que no se pudieron imprimir, casi siempre por papel o porque la impresora estaba apagada. Arréglalo y vuelve a mandarlos desde **Ajustes → Impresoras**.
+
+**Cobré en la tableta y no encuentro el ticket.**
+Salió en la impresora del mostrador: las dos cajas imprimen en la misma.
+
+**El equipo dice que no tiene caja asignada.**
+Elige la caja que le toca en la pantalla que aparece. La computadora del mostrador es la **Caja Principal** y la tableta es la **Caja iPad**. Nunca las dos en la misma.
 
 **La diferencia del corte no cuadra.**
 Vuelve a contar. Revisa que hayas registrado los resguardos. Si sigue sin cuadrar, **anota el número real** y avisa: no lo maquilles.

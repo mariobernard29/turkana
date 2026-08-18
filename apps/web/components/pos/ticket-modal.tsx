@@ -3,7 +3,7 @@
 import { Check, Printer } from "lucide-react";
 import type { SaleResult } from "@/app/pos/actions";
 import { formatMXN } from "@/lib/utils";
-import { printReceiptHTML } from "@/lib/print";
+import { printReceipt } from "@/lib/print-direct";
 import type { ReceiptData } from "@/lib/escpos";
 import { methodLabel } from "@/lib/payments";
 
@@ -53,7 +53,7 @@ export function TicketModal({
         </div>
 
         <button
-          onClick={() => printReceiptHTML(receipt)}
+          onClick={() => void printReceipt(receipt)}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-ink/15 py-3 text-sm text-ink hover:border-gold"
         >
           <Printer className="h-4 w-4" /> Imprimir ticket

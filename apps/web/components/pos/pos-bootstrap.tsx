@@ -2,17 +2,19 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { WifiOff, RefreshCw, Check, AlertTriangle } from "lucide-react";
+import { WifiOff, RefreshCw, Check, AlertTriangle, Printer } from "lucide-react";
 import { useOnline } from "./use-online";
 import { getDeviceId } from "@/lib/offline/device";
 import { getPendingOps, markOp, statusCounts } from "@/lib/offline/db";
 import { processSyncBatch } from "@/app/pos/actions";
+import { getPrinterStatus, type PrinterStatus } from "@/app/pos/print-actions";
 
 export function PosBootstrap() {
   const online = useOnline();
   const router = useRouter();
   const [counts, setCounts] = useState({ pending: 0, conflict: 0 });
   const [syncing, setSyncing] = useState(false);
+  const [printer, setPrinter] = useState<PrinterStatus | null>(null);
   const syncingRef = useRef(false);
 
   // Registrar el Service Worker (PWA instalable + offline) SOLO en producción.
@@ -50,6 +52,24 @@ export function PosBootstrap() {
     }
   }, [refresh, router]);
 
+  // Estado de la impresora: si el agente del mostrador se cayó, el cajero tiene
+  // que enterarse ANTES de cobrar, no cuando el papel no sale.
+  const refreshPrinter = useCallback(async () => {
+    if (!navigator.onLine) return;
+    try { setPrinter(await getPrinterStatus()); } catch { /* sin red */ }
+  }, []);
+
+  useEffect(() => { refreshPrinter(); }, [refreshPrinter]);
+  useEffect(() => {
+    const h = () => refreshPrinter();
+    window.addEventListener("turkana-print", h);
+    return () => window.removeEventListener("turkana-print", h);
+  }, [refreshPrinter]);
+  useEffect(() => {
+    const i = setInterval(() => { if (navigator.onLine) refreshPrinter(); }, 60000);
+    return () => clearInterval(i);
+  }, [refreshPrinter]);
+
   // Refresca conteos y reintenta sincronizar periódicamente / al volver la red.
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => {
@@ -69,6 +89,7 @@ export function PosBootstrap() {
 
   return (
     <div className="flex items-center gap-2">
+      {printer?.configured && <PrinterPill printer={printer} />}
       {showConflict && (
         <Pill className="bg-red-600 text-white">
           <AlertTriangle className="h-3 w-3" /> {counts.conflict}
@@ -92,9 +113,34 @@ export function PosBootstrap() {
   );
 }
 
-function Pill({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function PrinterPill({ printer }: { printer: PrinterStatus }) {
+  const name = printer.name ?? "Impresora";
+
+  if (!printer.online) {
+    return (
+      <Pill className="bg-amber-500 text-white" title={`${name} no responde · los tickets saldrán por el diálogo del navegador`}>
+        <Printer className="h-3 w-3" /> Sin impresora
+      </Pill>
+    );
+  }
+  if (printer.failed > 0) {
+    return (
+      <Pill className="bg-red-600 text-white" title={`${printer.failed} ticket(s) no se pudieron imprimir · revisa papel y encendido`}>
+        <Printer className="h-3 w-3" /> {printer.failed}
+      </Pill>
+    );
+  }
   return (
-    <div className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium ${className}`}>
+    <Pill className="bg-green-600/90 text-white" title={name}>
+      <Printer className="h-3 w-3" />
+      {printer.pending > 0 ? printer.pending : null}
+    </Pill>
+  );
+}
+
+function Pill({ children, className = "", title }: { children: React.ReactNode; className?: string; title?: string }) {
+  return (
+    <div title={title} className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium ${className}`}>
       {children}
     </div>
   );

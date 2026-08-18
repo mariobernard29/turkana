@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { openSession } from "@/app/pos/actions";
+import { openSession, forgetRegister } from "@/app/pos/actions";
+import { getDeviceId, deviceLabel, detectPlatform, setRegisterId } from "@/lib/offline/device";
 
-export function PosOpen({ registers }: { registers: { id: string; name: string }[] }) {
+export function PosOpen({ register }: { register: { id: string; name: string } }) {
   const router = useRouter();
-  const [registerId, setRegisterId] = useState(registers[0]?.id ?? "");
   const [float, setFloat] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,9 +16,22 @@ export function PosOpen({ registers }: { registers: { id: string; name: string }
     e.preventDefault();
     setError(null);
     setBusy(true);
-    const res = await openSession({ registerId, openingFloatPesos: Number(float) || 0 });
+    setRegisterId(register.id);
+    const res = await openSession({
+      registerId: register.id,
+      openingFloatPesos: Number(float) || 0,
+      deviceId: getDeviceId(),
+      deviceName: deviceLabel(),
+      platform: detectPlatform(),
+    });
     setBusy(false);
     if (!res.ok) { setError(res.error ?? "Error"); return; }
+    router.refresh();
+  };
+
+  const changeRegister = async () => {
+    setBusy(true);
+    await forgetRegister();
     router.refresh();
   };
 
@@ -33,12 +46,15 @@ export function PosOpen({ registers }: { registers: { id: string; name: string }
         <div className="space-y-5">
           <div>
             <label className="mb-1.5 block text-xs uppercase tracking-wider text-muted">Caja</label>
-            <select className={field} value={registerId} onChange={(e) => setRegisterId(e.target.value)} required>
-              {registers.length === 0 && <option value="">Sin cajas configuradas</option>}
-              {registers.map((r) => (
-                <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </select>
+            <div className="flex items-center justify-between rounded-xl border border-ink/10 bg-cream/40 px-4 py-4">
+              <span className="text-lg text-ink">{register.name}</span>
+              <button
+                type="button" onClick={changeRegister} disabled={busy}
+                className="text-xs uppercase tracking-wider text-muted transition-colors hover:text-gold-dark disabled:opacity-50"
+              >
+                Cambiar
+              </button>
+            </div>
           </div>
           <div>
             <label className="mb-1.5 block text-xs uppercase tracking-wider text-muted">Fondo inicial (efectivo)</label>
@@ -54,7 +70,7 @@ export function PosOpen({ registers }: { registers: { id: string; name: string }
 
         <button
           type="submit"
-          disabled={busy || !registerId}
+          disabled={busy}
           className="mt-8 flex w-full items-center justify-center gap-2 rounded-full bg-ink py-4 text-sm uppercase tracking-widest text-cream transition-colors hover:bg-gold-dark disabled:opacity-50"
         >
           {busy && <Loader2 className="h-4 w-4 animate-spin" />}

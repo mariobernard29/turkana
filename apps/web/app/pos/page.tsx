@@ -1,7 +1,11 @@
+import { cookies } from "next/headers";
 import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { loadOpenSessions } from "@/lib/cash-report";
+import { REGISTER_COOKIE } from "@/lib/pos-register";
 import { PosOpen } from "@/components/pos/pos-open";
+import { PosRegisterPicker, type PickerRegister } from "@/components/pos/pos-register-picker";
 import { PosSale, type PosProduct } from "@/components/pos/pos-sale";
 
 export const dynamic = "force-dynamic";
@@ -26,24 +30,21 @@ function sortTallas(a: { talla: string }, b: { talla: string }) {
   return a.talla.localeCompare(b.talla);
 }
 
-async function loadPos() {
+async function loadPos(registerId: string) {
   const db = createAdminClient();
 
-  // Hay UN turno a la vez para toda la tienda, sin importar quién lo abrió: el
-  // cajón es uno solo. Antes el turno era por cajero y una venta cobrada con
-  // otra cuenta no entraba en el corte de quien cerraba.
+  // Un turno por CAJA: el mostrador y el iPad cobran a la vez, cada uno con su
+  // cajón. Se busca el turno de ESTA caja, no "el turno de la tienda".
   const { data: sessionData } = await db
     .from("cash_sessions")
     .select("id, opening_float_cents, opened_at")
+    .eq("register_id", registerId)
     .eq("status", "open")
-    .order("opened_at", { ascending: true })
-    .limit(1)
     .maybeSingle();
   const session = sessionData as unknown as { id: string; opening_float_cents: number } | null;
 
   if (!session) {
-    const { data: registers } = await db.from("cash_registers").select("id, name").order("name");
-    return { session: null, registers: (registers as unknown as { id: string; name: string }[]) ?? [], products: [] as PosProduct[], categories: [] as { id: string; name: string }[] };
+    return { session: null, products: [] as PosProduct[], categories: [] as { id: string; name: string }[] };
   }
 
   const { data: loc } = await db.from("inventory_locations").select("id").eq("key", "tienda").maybeSingle();
@@ -84,15 +85,49 @@ async function loadPos() {
     .map((p) => ({ ...p, sizes: p.sizes.sort(sortTallas) }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return { session, registers: [], products, categories };
+  return { session, products, categories };
+}
+
+// Las cajas que puede ser este equipo, con el turno abierto de cada una para que
+// nadie tome por error la caja que ya está trabajando el compañero.
+async function loadPickerRegisters(): Promise<PickerRegister[]> {
+  const db = createAdminClient();
+  const { data } = await db
+    .from("cash_registers").select("id, name").eq("is_active", true).order("name");
+  const registers = (data as unknown as { id: string; name: string }[]) ?? [];
+  const open = await loadOpenSessions(db);
+  return registers.map((r) => {
+    const turn = open.find((o) => o.registerId === r.id);
+    return {
+      id: r.id,
+      name: r.name,
+      openTurn: turn ? { cashier: turn.cashier, openedAt: turn.openedAt } : null,
+    };
+  });
 }
 
 export default async function PosPage() {
   await requireStaff("/pos");
-  const { session, registers, products, categories } = await loadPos();
+
+  const jar = await cookies();
+  const registerId = jar.get(REGISTER_COOKIE)?.value ?? null;
+
+  // Sin caja asignada (equipo nuevo, o la caja se dio de baja) no se puede
+  // cobrar: no habría a qué corte mandar el dinero.
+  const db = createAdminClient();
+  const { data: reg } = registerId
+    ? await db.from("cash_registers").select("id, name").eq("id", registerId).eq("is_active", true).maybeSingle()
+    : { data: null };
+  const register = reg as { id: string; name: string } | null;
+
+  if (!register) {
+    return <PosRegisterPicker registers={await loadPickerRegisters()} />;
+  }
+
+  const { session, products, categories } = await loadPos(register.id);
 
   if (!session) {
-    return <PosOpen registers={registers} />;
+    return <PosOpen register={register} />;
   }
   return <PosSale session={{ id: session.id }} products={products} categories={categories} />;
 }

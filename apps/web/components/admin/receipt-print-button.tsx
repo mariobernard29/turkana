@@ -3,7 +3,7 @@
 // Reimprime el ticket de una venta ya registrada (el ReceiptData se arma en el
 // server component desde la orden guardada).
 import { Printer } from "lucide-react";
-import { printReceiptHTML } from "@/lib/print";
+import { printReceipt } from "@/lib/print-direct";
 import type { ReceiptData } from "@/lib/escpos";
 
 export function ReceiptPrintButton({
@@ -15,7 +15,7 @@ export function ReceiptPrintButton({
 }) {
   return (
     <button
-      onClick={() => printReceiptHTML(receipt)}
+      onClick={() => void printReceipt(receipt)}
       className="inline-flex items-center gap-2 rounded-full border border-ink/15 px-4 py-2 text-sm text-ink hover:border-gold"
     >
       <Printer className="h-4 w-4" /> {label}

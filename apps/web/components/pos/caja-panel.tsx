@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { X, Loader2, AlertTriangle, ShieldCheck, Printer } from "lucide-react";
 import { getCajaInfo, createCashDrop, precut, type CajaInfo } from "@/app/pos/caja-actions";
-import { printReceiptHTML } from "@/lib/print";
+import { printReceipt } from "@/lib/print-direct";
 import { formatMXN, cn } from "@/lib/utils";
 
 const field = "w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm outline-none focus:border-gold";
@@ -39,7 +39,7 @@ export function CajaPanel({
     const res = await createCashDrop({ sessionId, amountPesos: Number(amount), notes });
     setBusy(false);
     if (!res.ok) { setMsg({ k: "err", t: res.error ?? "Error" }); return; }
-    if (res.comprobante) printReceiptHTML(res.comprobante);
+    if (res.comprobante) await printReceipt(res.comprobante, { sessionId });
     setMsg({ k: "ok", t: "Resguardo registrado" });
     setAmount(""); setNotes(""); reload();
   };
@@ -49,7 +49,7 @@ export function CajaPanel({
     const res = await precut({ sessionId, cashPesos: Number(cash), debitPesos: Number(debit), creditPesos: Number(credit), amexPesos: Number(amex), transferPesos: Number(transfer), newCashierId: newCashier || undefined });
     setBusy(false);
     if (!res.ok) { setMsg({ k: "err", t: res.error ?? "Error" }); return; }
-    if (res.comprobante) printReceiptHTML(res.comprobante);
+    if (res.comprobante) await printReceipt(res.comprobante, { sessionId });
     setMsg({ k: "ok", t: newCashier ? "Precorte hecho · cajero actualizado" : "Precorte registrado" });
     setCash(""); setDebit(""); setCredit(""); setAmex(""); setTransfer(""); setNewCashier(""); reload();
   };

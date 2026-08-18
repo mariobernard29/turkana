@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { Loader2, Printer } from "lucide-react";
 import { getCashCutReceipt } from "@/app/pos/corte-actions";
-import { printReceiptHTML } from "@/lib/print";
+import { printReceipt } from "@/lib/print-direct";
 
 export function CutPrintButton({ sessionId }: { sessionId: string }) {
   const [busy, setBusy] = useState(false);
@@ -15,7 +15,7 @@ export function CutPrintButton({ sessionId }: { sessionId: string }) {
     const res = await getCashCutReceipt(sessionId);
     setBusy(false);
     if (!res.ok || !res.receipt) { setError(res.error ?? "No se pudo armar el corte"); return; }
-    printReceiptHTML({ ...res.receipt, reprint: true });
+    await printReceipt({ ...res.receipt, reprint: true });
   };
 
   return (
