@@ -32,7 +32,7 @@ impresora del mostrador** sin necesitar nada instalado.
 3. **Comprobar que responde**, desde PowerShell en esta PC:
 
    ```powershell
-   Test-NetConnection 192.168.1.100 -Port 9100
+   Test-NetConnection 192.168.100.27 -Port 9100
    ```
 
    Tiene que decir `TcpTestSucceeded : True`.
@@ -45,6 +45,7 @@ impresora del mostrador** sin necesitar nada instalado.
    mismo aparece el identificador que va en `PRINTER_ID`.
 
 6. **Configurar el agente**: copia `.env.example` a `.env` y llena los valores.
+   El archivo se llama `.env` a secas — no `.env.example`, no `.env.txt`.
 
 7. **Probar** que imprime:
 
@@ -64,6 +65,43 @@ impresora del mostrador** sin necesitar nada instalado.
    Queda registrado como tarea de Windows: arranca al iniciar sesión y se vuelve
    a levantar si se cae.
 
+### Si dice que la ejecución de scripts está deshabilitada
+
+Windows trae bloqueados los scripts de PowerShell. Corre esto una vez —**no hace
+falta ser administrador**, el ámbito `CurrentUser` no lo pide:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+`RemoteSigned` deja correr los scripts hechos en la propia máquina y sigue
+bloqueando los descargados sin firma. Después de eso, `.\instalar.ps1` funciona.
+
+Si prefieres no cambiarle nada a la computadora, hazlo por única vez:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\instalar.ps1
+```
+
+Ojo con un detalle: en Windows `npm` también es un script de PowerShell, así que
+con la política bloqueada **`npm install` falla igual**. Sin cambiar la política,
+usa `npm.cmd` en lugar de `npm`.
+
+Para ver cómo está y de dónde viene: `Get-ExecutionPolicy -List`. Si el renglón
+`MachinePolicy` o `UserPolicy` trae algo distinto de `Undefined`, la puso una
+directiva del sistema y `CurrentUser` no la puede pisar — usa entonces la opción
+de abajo.
+
+### Sin PowerShell, por si nada de lo anterior se puede
+
+`iniciar-agente.cmd` hace lo mismo sin depender de la política de scripts:
+instala las dependencias si faltan, arranca el agente y lo vuelve a levantar si
+se cae.
+
+Para que arranque con Windows: teclea `shell:startup` en el menú Inicio y deja
+ahí un acceso directo a ese archivo. Queda una ventana negra abierta —conviene
+dejarla, ahí se ve lo que va imprimiendo.
+
 ## Cómo saber si está funcionando
 
 En el encabezado del POS hay una pastilla con un ícono de impresora:
@@ -80,6 +118,11 @@ del navegador en el momento. Así el cajero entrega el ticket igual y no aparece
 un papel sorpresa horas después.
 
 ## Cuando algo falla
+
+**Dice que falta configurar cosas del `.env`.**
+Tiene que llamarse exactamente `.env`. Windows esconde las extensiones: si al
+copiarlo quedó como `.env.txt`, el agente no lo ve. Compruébalo con `dir /a`.
+Revisa también que el `PRINTER_ID` no traiga espacios ni un punto al final.
 
 **No sale nada y la pastilla está ámbar.**
 Revisa que la PC esté encendida y que la tarea corra:
@@ -114,3 +157,5 @@ sólo con unos segundos de retraso.
   hubiera dos agentes, ninguno imprime el mismo ticket dos veces.
 - Se reintenta 3 veces antes de marcar el ticket como error.
 - Los tickets impresos se borran de la cola a los 7 días.
+- El `.env` no se sube al repositorio (lleva la contraseña del usuario de la
+  impresora). El que sí está versionado es `.env.example`, y va sin valores.
