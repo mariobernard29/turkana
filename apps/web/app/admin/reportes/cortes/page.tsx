@@ -25,7 +25,9 @@ type Row = {
   cash_registers: { name: string } | { name: string }[] | null;
 };
 
-async function load(f: Filters): Promise<{ rows: Row[]; names: Record<string, string> }> {
+type Movs = { gastos: number; ingresos: number; conceptos: string[] };
+
+async function load(f: Filters): Promise<{ rows: Row[]; names: Record<string, string>; movs: Record<string, Movs> }> {
   try {
     const db = createAdminClient();
     let q = db
@@ -46,9 +48,27 @@ async function load(f: Filters): Promise<{ rows: Row[]; names: Record<string, st
       const { data: profs } = await db.from("profiles").select("id, full_name").in("id", ids);
       for (const p of (profs as unknown as { id: string; full_name: string }[]) ?? []) names[p.id] = p.full_name;
     }
-    return { rows, names };
+
+    // Gastos e ingresos del turno. No viven en cash_sessions —son movimientos—,
+    // pero explican por qué el efectivo esperado no es sólo ventas más fondo.
+    const movs: Record<string, Movs> = {};
+    if (rows.length) {
+      const { data: ms } = await db
+        .from("cash_movements")
+        .select("session_id, type, amount_cents, notes")
+        .in("session_id", rows.map((r) => r.id))
+        .in("type", ["expense", "in"]);
+      for (const m of (ms as unknown as { session_id: string; type: string; amount_cents: number; notes: string | null }[]) ?? []) {
+        const acc = movs[m.session_id] ?? { gastos: 0, ingresos: 0, conceptos: [] };
+        if (m.type === "expense") acc.gastos += m.amount_cents;
+        else acc.ingresos += m.amount_cents;
+        if (m.notes) acc.conceptos.push(`${m.type === "expense" ? "−" : "+"}${formatMXN(m.amount_cents)} ${m.notes}`);
+        movs[m.session_id] = acc;
+      }
+    }
+    return { rows, names, movs };
   } catch {
-    return { rows: [], names: {} };
+    return { rows: [], names: {}, movs: {} };
   }
 }
 
@@ -64,7 +84,7 @@ async function loadOpen() {
 
 export default async function CortesPage({ searchParams }: { searchParams: Promise<Filters> }) {
   const f = await searchParams;
-  const [{ rows, names }, open] = await Promise.all([load(f), loadOpen()]);
+  const [{ rows, names, movs }, open] = await Promise.all([load(f), loadOpen()]);
   const inputCls = "rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm outline-none focus:border-gold";
 
   return (
@@ -118,6 +138,7 @@ export default async function CortesPage({ searchParams }: { searchParams: Promi
         {rows.length === 0 && <p className="py-12 text-center text-muted">Sin cortes en esta búsqueda.</p>}
         {rows.map((s) => {
           const diff = s.difference_cents ?? 0;
+          const m = movs[s.id];
           return (
             <div key={s.id} className="rounded-2xl border border-ink/10 bg-white p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -150,7 +171,17 @@ export default async function CortesPage({ searchParams }: { searchParams: Promi
                 )}
                 <Detail label="Transferencias" value={formatMXN(s.counted_transfer_cents ?? 0)} />
                 <Detail label="Apertura" value={new Date(s.opened_at).toLocaleString("es-MX")} />
+                {m && m.gastos > 0 && <Detail label="Gastos de caja" value={`− ${formatMXN(m.gastos)}`} />}
+                {m && m.ingresos > 0 && <Detail label="Ingresos a caja" value={`+ ${formatMXN(m.ingresos)}`} />}
               </div>
+
+              {/* En qué se fue o de dónde salió el dinero: sin el concepto, un
+                  corte con gastos no se puede revisar sin ir a buscar los papeles. */}
+              {m && m.conceptos.length > 0 && (
+                <ul className="mt-3 space-y-0.5 border-t border-ink/5 pt-3 text-xs text-muted">
+                  {m.conceptos.map((c, i) => <li key={i}>{c}</li>)}
+                </ul>
+              )}
             </div>
           );
         })}

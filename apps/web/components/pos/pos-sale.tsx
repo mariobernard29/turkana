@@ -16,6 +16,7 @@ import { AccountsPanel } from "@/components/pos/accounts-panel";
 import { LayawayModal } from "@/components/pos/layaway-modal";
 import { ReturnsModal } from "@/components/pos/returns-modal";
 import { CajaPanel } from "@/components/pos/caja-panel";
+import { CashEntryModal } from "@/components/pos/cash-entry-modal";
 import { PaymentCalculator } from "@/components/pos/payment-calculator";
 import { useOnline } from "@/components/pos/use-online";
 import { cacheProducts, getCachedProducts, enqueueSale, type CachedProduct } from "@/lib/offline/db";
@@ -67,6 +68,7 @@ export function PosSale({
   const [showAccounts, setShowAccounts] = useState(false);
   const [showReturns, setShowReturns] = useState(false);
   const [showCaja, setShowCaja] = useState(false);
+  const [showCashEntry, setShowCashEntry] = useState(false);
   const [caja, setCaja] = useState<{ expectedCash: number; thresholdCents: number } | null>(null);
 
   const refreshCaja = useCallback(async () => {
@@ -249,6 +251,7 @@ export function PosSale({
                   {[
                     { label: discount ? "Descuento (aplicado)" : "Descuento", fn: () => setShowDiscount(true) },
                     { label: "Servicio", fn: () => setShowService(true) },
+                    { label: "Gasto o ingreso de caja", fn: () => setShowCashEntry(true) },
                     { label: "Apartados y crédito", fn: () => setShowAccounts(true) },
                     { label: "Cambios", fn: () => setShowReturns(true) },
                     { label: overCashLimit ? "Caja · resguardo ⚠" : "Caja · resguardo / precorte", fn: () => setShowCaja(true) },
@@ -466,6 +469,13 @@ export function PosSale({
       {showAccounts && <AccountsPanel sessionId={session.id} onClose={() => setShowAccounts(false)} />}
       {showReturns && <ReturnsModal sessionId={session.id} variants={flatVariants} onClose={() => setShowReturns(false)} />}
       {showCaja && <CajaPanel sessionId={session.id} onClose={() => { setShowCaja(false); refreshCaja(); }} />}
+      {showCashEntry && (
+        <CashEntryModal
+          sessionId={session.id}
+          onClose={() => setShowCashEntry(false)}
+          onDone={refreshCaja}
+        />
+      )}
       {pickProduct && (
         <SizePicker
           product={pickProduct}

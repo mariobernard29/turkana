@@ -129,7 +129,7 @@ export function summaryPairs(t: CashTotals): CashPair[] {
   if (t.precutsCents > 0) pairs.push({ label: "Precortes", cents: t.precutsCents });
   if (t.layawayInCents > 0) pairs.push({ label: "Abonos de apartado", cents: t.layawayInCents });
   if (t.creditInCents > 0) pairs.push({ label: "Abonos de crédito", cents: t.creditInCents });
-  if (t.otherInCents > 0) pairs.push({ label: "Otras entradas", cents: t.otherInCents });
+  if (t.otherInCents > 0) pairs.push({ label: "Ingresos a caja", cents: t.otherInCents });
   if (t.creditSalesCents > 0) pairs.push({ label: "Fiado del turno (sin cobro)", cents: t.creditSalesCents });
   return pairs;
 }

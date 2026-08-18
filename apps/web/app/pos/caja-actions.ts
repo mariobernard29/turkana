@@ -65,6 +65,65 @@ export async function createCashDrop(input: {
   };
 }
 
+// ── Gasto / ingreso de caja ──────────────────────────────────────────────────
+// Dinero que sale del cajón para una compra (gasto) o que entra por algo que no
+// es una venta (ingreso). Los dos piden concepto: sin él, al cuadrar el corte no
+// hay forma de saber en qué se fue el dinero, y una diferencia sin explicación es
+// justo lo que no debe pasar.
+export async function registerCashEntry(input: {
+  sessionId: string;
+  kind: "gasto" | "ingreso";
+  concept: string;
+  amountPesos: number;
+}): Promise<{ ok: boolean; error?: string; comprobante?: Comprobante }> {
+  const staff = await requireStaff();
+  const db = createAdminClient();
+
+  const amount = pesos(input.amountPesos);
+  if (amount <= 0) return { ok: false, error: "Importe inválido" };
+  const concept = input.concept.trim();
+  if (!concept) {
+    return {
+      ok: false,
+      error: input.kind === "gasto" ? "Escribe en qué se gastó" : "Escribe por qué entró el dinero",
+    };
+  }
+
+  if (input.kind === "gasto") {
+    // No se puede sacar del cajón más de lo que hay: el corte quedaría en
+    // negativo y la diferencia sería imposible de explicar.
+    const totals = await loadSessionTotals(db, input.sessionId);
+    if (amount > totals.expectedCash) {
+      return { ok: false, error: `En caja hay ${(totals.expectedCash / 100).toFixed(2)} en efectivo` };
+    }
+    await db.from("expenses").insert({
+      session_id: input.sessionId, concept, amount_cents: amount, created_by: staff.id,
+    });
+  }
+
+  await db.from("cash_movements").insert({
+    session_id: input.sessionId,
+    type: input.kind === "gasto" ? "expense" : "in",
+    method: "cash",
+    amount_cents: amount,
+    reference_type: "manual",
+    notes: concept,
+    created_by: staff.id,
+  });
+
+  revalidatePath("/pos");
+  return {
+    ok: true,
+    comprobante: {
+      orderNumber: input.kind === "gasto" ? "GASTO" : "INGRESO",
+      docType: input.kind,
+      attendedBy: staff.fullName,
+      items: [{ name: concept, quantity: 1, total_cents: amount }],
+      subtotal: amount, tax: 0, total: amount, method: "cash",
+    },
+  };
+}
+
 // ── Precorte (corte parcial / cambio de cajero) ──────────────────────────────
 export async function precut(input: {
   sessionId: string; cashPesos: number; debitPesos: number; creditPesos: number; amexPesos: number; transferPesos: number; newCashierId?: string;

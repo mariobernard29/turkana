@@ -5,7 +5,8 @@ import { methodLabel } from "@/lib/payments";
 
 // Tipos de documento que se imprimen en el POS.
 export type DocType =
-  | "sale" | "resguardo" | "precorte" | "devolucion" | "cambio" | "abono" | "corte" | "apartado";
+  | "sale" | "resguardo" | "precorte" | "devolucion" | "cambio" | "abono" | "corte" | "apartado"
+  | "gasto" | "ingreso";
 
 // Fila de una sección libre (etiqueta/valor). Sin `value` ocupa todo el ancho.
 export type ReceiptRow = {
@@ -51,6 +52,8 @@ export const DOC_TITLES: Record<DocType, string> = {
   abono: "COMPROBANTE DE ABONO",
   corte: "CORTE DE CAJA",
   apartado: "COMPROBANTE DE APARTADO",
+  gasto: "COMPROBANTE DE GASTO",
+  ingreso: "COMPROBANTE DE INGRESO",
 };
 
 export const DOC_DETAIL_LABELS: Record<DocType, string> = {
@@ -62,6 +65,8 @@ export const DOC_DETAIL_LABELS: Record<DocType, string> = {
   abono: "CONCEPTO",
   corte: "DETALLE",
   apartado: "PIEZAS APARTADAS",
+  gasto: "SE GASTÓ EN",
+  ingreso: "MOTIVO DEL INGRESO",
 };
 
 export const DOC_TOTAL_LABELS: Record<DocType, string> = {
@@ -73,6 +78,8 @@ export const DOC_TOTAL_LABELS: Record<DocType, string> = {
   abono: "ABONO",
   corte: "DIFERENCIA",
   apartado: "SALDO",
+  gasto: "SALIÓ DE CAJA",
+  ingreso: "ENTRÓ A CAJA",
 };
 
 export const docType = (d: ReceiptData): DocType => d.docType ?? "sale";
