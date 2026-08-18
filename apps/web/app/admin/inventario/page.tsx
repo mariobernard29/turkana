@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MAIN_LOCATION_KEY } from "@/lib/inventory";
+import { fetchAll } from "@/lib/supabase/paginate";
 import { InventoryManager, type InvRow } from "@/components/admin/inventory-manager";
 
 export const dynamic = "force-dynamic";
@@ -19,14 +20,15 @@ async function loadInventory(): Promise<InvRow[]> {
     .from("inventory_locations").select("id").eq("key", MAIN_LOCATION_KEY).maybeSingle();
   const locId = (loc as { id: string } | null)?.id;
 
-  const { data } = await db
+  // Por páginas: el catálogo completo pasa de mil tallas y de un solo tiro
+  // PostgREST recorta sin avisar, dejando piezas fuera del conteo.
+  const variants = await fetchAll<RawVariant>((from, to) => db
     .from("product_variants")
     .select("id, sku, attributes, products(name, deleted_at), stock_levels(quantity, reserved, location_id)")
     .eq("is_active", true)
     .is("deleted_at", null)
-    .limit(1000);
-
-  const variants = (data as unknown as RawVariant[]) ?? [];
+    .order("id")
+    .range(from, to));
 
   return variants
     .map((v): InvRow | null => {

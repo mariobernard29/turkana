@@ -1,5 +1,6 @@
 import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAll } from "@/lib/supabase/paginate";
 import { PosOpen } from "@/components/pos/pos-open";
 import { PosSale, type PosProduct } from "@/components/pos/pos-sale";
 
@@ -51,16 +52,19 @@ async function loadPos() {
   const { data: catData } = await db.from("categories").select("id, name").is("deleted_at", null).order("name");
   const categories = (catData as unknown as { id: string; name: string }[]) ?? [];
 
-  const { data: vData } = await db
+  // Por páginas: con el catálogo completo pasan de mil tallas, y de un solo tiro
+  // PostgREST recorta sin avisar. Una talla que no llega aquí no se puede cobrar.
+  const vData = await fetchAll<RawVariant>((from, to) => db
     .from("product_variants")
     .select("id, product_id, sku, attributes, price_cents, products(name, status, deleted_at, category_id, product_images(storage_path, position, variant_id)), stock_levels(quantity, reserved, low_stock_threshold, location_id)")
     .eq("is_active", true)
     .is("deleted_at", null)
-    .limit(1000);
+    .order("id")
+    .range(from, to));
 
   // Agrupar variantes (tallas) por producto.
   const map = new Map<string, PosProduct>();
-  for (const v of (vData as unknown as RawVariant[]) ?? []) {
+  for (const v of vData) {
     const prod = Array.isArray(v.products) ? v.products[0] : v.products;
     if (!prod || prod.deleted_at || prod.status !== "active") continue;
     const st = (v.stock_levels ?? []).find((s) => s.location_id === tiendaId);

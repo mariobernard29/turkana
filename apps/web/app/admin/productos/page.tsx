@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAll } from "@/lib/supabase/paginate";
 import { CategoriesManager } from "@/components/admin/categories-manager";
 import { ProductsTable, type ProductRow } from "@/components/admin/products-table";
 import { ProductsExcel } from "@/components/admin/products-excel";
 
 export const dynamic = "force-dynamic";
 
-// Filtros del lado del servidor: la consulta trae 100 piezas, así que filtrar en
-// el cliente filtraría un conjunto ya truncado y el conteo mentiría.
+// Filtros del lado del servidor: filtrar en el cliente filtraría un conjunto ya
+// truncado y el conteo mentiría.
 type Filters = { cat?: string; estado?: string };
 const STATUSES = ["draft", "active", "archived"] as const;
 const STATUS_LABEL: Record<string, string> = { draft: "Borrador", active: "Activo", archived: "Archivado" };
@@ -16,16 +17,19 @@ const STATUS_LABEL: Record<string, string> = { draft: "Borrador", active: "Activ
 async function loadProducts(f: Filters): Promise<ProductRow[]> {
   try {
     const db = createAdminClient();
-    let q = db
-      .from("products")
-      .select("id, name, sku, status, categories(name), product_variants(price_cents)")
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-      .limit(100);
-    if (f.cat) q = q.eq("category_id", f.cat);
-    if (f.estado && (STATUSES as readonly string[]).includes(f.estado)) q = q.eq("status", f.estado);
-    const { data } = await q;
-    return (data as unknown as ProductRow[]) ?? [];
+    // Traía 100 y decía "100 piezas en catálogo" con mil dadas de alta: no había
+    // forma de notar que faltaban. Ahora se recorre completo, por páginas.
+    return await fetchAll<ProductRow>((from, to) => {
+      let q = db
+        .from("products")
+        .select("id, name, sku, status, categories(name), product_variants(price_cents)")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .range(from, to);
+      if (f.cat) q = q.eq("category_id", f.cat);
+      if (f.estado && (STATUSES as readonly string[]).includes(f.estado)) q = q.eq("status", f.estado);
+      return q;
+    });
   } catch {
     return [];
   }
