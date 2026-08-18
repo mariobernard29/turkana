@@ -85,7 +85,8 @@ export function ProductsExcel() {
         Una fila por talla, cada una con su propio código: las filas que comparten el
         nombre son el mismo producto. La columna <strong>Inventario tienda</strong> deja
         las piezas que hay en el mostrador (vacía = no se toca); el e-commerce se surte
-        desde Inventario. Los productos se dan de alta como borrador y ocultos en la web.
+        desde Inventario. Los productos entran <strong>activos</strong> —se pueden cobrar
+        en el POS de inmediato— y ocultos en la tienda web hasta que los publiques.
       </p>
 
       {error && <p className="mt-3 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</p>}

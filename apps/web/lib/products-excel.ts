@@ -57,10 +57,12 @@ export const PRODUCT_LEVEL_KEYS = [
 
 // Cómo quedan los productos dados de alta por Excel. Sólo se aplican al crear:
 // si el producto ya existe, la importación no toca estos campos.
+// Entran listos para vender en el mostrador y fuera de la tienda web: la web pide
+// fotos y textos revisados, el POS no.
 export const CREATE_DEFAULTS = {
-  status: "draft" as const,   // borrador
+  status: "active" as const,  // activo: se puede cobrar en cuanto se importa
   is_featured: false,
-  hidden_online: true,        // no visible en la web hasta revisarlo
+  hidden_online: true,        // sólo POS; se publica a mano desde el admin
   track_inventory: true,
 };
 

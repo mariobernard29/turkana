@@ -371,8 +371,9 @@ export async function importProductsExcel(fileBase64: string): Promise<ImportSum
     let touched = false;
 
     if (!existing) {
-      // Alta: borrador, sin destacar, oculto en la web y con control de
-      // inventario. Las piezas de tienda entran con la columna Inventario.
+      // Alta: activo (cobrable en el POS desde ya), sin destacar, oculto en la
+      // web y con control de inventario. Las piezas entran por la columna
+      // Inventario.
       const { data: created, error } = await db.from("products")
         .insert({
           ...productFields,
