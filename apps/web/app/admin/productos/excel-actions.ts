@@ -138,16 +138,35 @@ export async function exportProductsExcel(): Promise<{ ok: boolean; error?: stri
   };
 }
 
+
 // ── Importar ─────────────────────────────────────────────────────────────────
+// Va en dos pasos: el servidor lee el archivo una vez y devuelve los productos
+// ya agrupados; el navegador los manda de regreso en tandas. Antes era una sola
+// llamada que recorría todo el Excel, y con 1 196 filas la mataba el límite de
+// tiempo de la función a los cinco minutos, a media carga y sin avisar.
+
 export type ImportSummary = {
-  ok: boolean;
-  error?: string;
   creados: number;
   actualizados: number;
   sinCambios: number;
   variantesNuevas: number;
-  piezasCargadas: number;      // variantes a las que se les fijó el stock de tienda
+  piezasCargadas: number;      // tallas a las que se les fijó el inventario
   categoriasCreadas: string[];
+  avisos: string[];
+};
+
+// Un producto listo para importar: sus datos y una fila por talla.
+export type ParsedProduct = {
+  slug: string;                // identidad del grupo
+  head: ProductExcelRow;       // lo que describe la pieza
+  rows: ProductExcelRow[];     // una por talla
+};
+
+export type ParseResult = {
+  ok: boolean;
+  error?: string;
+  productos: ParsedProduct[];
+  filas: number;
   avisos: string[];
 };
 
@@ -155,14 +174,24 @@ type DbVariant = {
   id: string; sku: string; price_cents: number;
   attributes: Record<string, string> | null; position: number | null; deleted_at: string | null;
 };
+type DbProduct = Record<string, unknown> & {
+  id: string; slug: string;
+  product_variants?: DbVariant[];
+};
 
-export async function importProductsExcel(fileBase64: string): Promise<ImportSummary> {
-  const { error: permError, staff } = await requireCatalogStaff();
-  const empty = { creados: 0, actualizados: 0, sinCambios: 0, variantesNuevas: 0, piezasCargadas: 0, categoriasCreadas: [], avisos: [] };
-  if (permError || !staff) return { ok: false, error: permError ?? "Sin permisos", ...empty };
-  const db = createAdminClient();
+const emptySummary = (): ImportSummary => ({
+  creados: 0, actualizados: 0, sinCambios: 0,
+  variantesNuevas: 0, piezasCargadas: 0, categoriasCreadas: [], avisos: [],
+});
 
-  // 1) Leer el archivo
+const PRODUCT_SELECT =
+  "id, name, sku, slug, short_description, long_description, category_id, tags, seo_title, seo_description, product_variants(id, sku, price_cents, attributes, position, deleted_at)";
+
+// ── Paso 1: leer y agrupar ───────────────────────────────────────────────────
+export async function parseProductsExcel(fileBase64: string): Promise<ParseResult> {
+  const { error: permError } = await requireCatalogStaff();
+  if (permError) return { ok: false, error: permError, productos: [], filas: 0, avisos: [] };
+
   const wb = new ExcelJS.Workbook();
   try {
     // exceljs empaqueta tipos de Node viejos y su `Buffer` no coincide con el del
@@ -170,10 +199,10 @@ export async function importProductsExcel(fileBase64: string): Promise<ImportSum
     type LoadArg = Parameters<typeof wb.xlsx.load>[0];
     await wb.xlsx.load(Buffer.from(fileBase64, "base64") as unknown as LoadArg);
   } catch {
-    return { ok: false, error: "No se pudo leer el archivo: ¿es un .xlsx válido?", ...empty };
+    return { ok: false, error: "No se pudo leer el archivo: ¿es un .xlsx válido?", productos: [], filas: 0, avisos: [] };
   }
   const ws = wb.worksheets[0];
-  if (!ws) return { ok: false, error: "El archivo no tiene hojas", ...empty };
+  if (!ws) return { ok: false, error: "El archivo no tiene hojas", productos: [], filas: 0, avisos: [] };
 
   // Se ubican las columnas por su encabezado, así el orden puede cambiar.
   const headerRow = ws.getRow(1);
@@ -182,11 +211,12 @@ export async function importProductsExcel(fileBase64: string): Promise<ImportSum
     const def = columnForHeader(clean(cell.value));
     if (def && !colByKey.has(def.key)) colByKey.set(def.key, col);
   });
+  const falta = (msg: string): ParseResult => ({ ok: false, error: msg, productos: [], filas: 0, avisos: [] });
   if (!colByKey.has("nombre") || !colByKey.has("precio")) {
-    return { ok: false, error: "Faltan columnas obligatorias (Nombre y Precio). Usa el archivo de Descargar plantilla.", ...empty };
+    return falta("Faltan columnas obligatorias (Nombre y Precio). Usa el archivo de Descargar plantilla.");
   }
   if (!colByKey.has("sku")) {
-    return { ok: false, error: "Falta la columna Código (SKU): ahora cada talla lleva el suyo. Descarga la plantilla de nuevo.", ...empty };
+    return falta("Falta la columna Código (SKU): ahora cada talla lleva el suyo. Descarga la plantilla de nuevo.");
   }
 
   const avisos: string[] = [];
@@ -245,7 +275,7 @@ export async function importProductsExcel(fileBase64: string): Promise<ImportSum
     });
   });
 
-  if (!parsed.length) return { ok: false, error: "No se encontraron filas con datos", ...empty, avisos };
+  if (!parsed.length) return { ok: false, error: "No se encontraron filas con datos", productos: [], filas: 0, avisos };
 
   // Un código no puede estar en dos filas: es lo que identifica a la talla.
   const seenSku = new Map<string, number>();
@@ -255,214 +285,284 @@ export async function importProductsExcel(fileBase64: string): Promise<ImportSum
     else seenSku.set(p.row.sku, p.excelRow);
   }
 
-  // 2) Agrupar por producto: mismo slug (o mismo nombre, si el slug va vacío).
+  // Agrupar por producto: mismo slug (o mismo nombre, si el slug va vacío).
   // El código ya no agrupa — ahora es de la talla.
   const slugOf = (r: ProductExcelRow) => r.slug || slugify(r.nombre) || "producto";
-  type Grouped = { key: string; rows: ProductExcelRow[]; firstRow: number };
-  const groups = new Map<string, Grouped>();
+  const groups = new Map<string, ParsedProduct>();
   for (const p of parsed) {
     if (seenSku.get(p.row.sku) !== p.excelRow) continue; // código repetido: ya avisado
-    const key = slugOf(p.row);
-    const g = groups.get(key) ?? { key, rows: [], firstRow: p.excelRow };
+    const slug = slugOf(p.row);
+    const g = groups.get(slug) ?? { slug, head: { ...p.row }, rows: [] };
     g.rows.push(p.row);
-    groups.set(key, g);
+    groups.set(slug, g);
   }
 
-  // 3) Catálogos auxiliares
-  const { data: cats } = await db.from("categories").select("id, name").is("deleted_at", null);
-  const catByName = new Map(((cats as unknown as { id: string; name: string }[]) ?? []).map((c) => [norm(c.name), c.id]));
-  const categoriasCreadas: string[] = [];
-
-  const { data: loc } = await db.from("inventory_locations").select("id").eq("key", IMPORT_LOCATION).maybeSingle();
-  const tiendaId = (loc as { id: string } | null)?.id ?? null;
-  if (!tiendaId) avisos.push("No se encontró el almacén de tienda: no se cargó inventario");
-
-  const ensureCategory = async (name: string): Promise<string | null> => {
-    if (!name) return null;
-    const hit = catByName.get(norm(name));
-    if (hit) return hit;
-    const { data, error } = await db.from("categories")
-      .insert({ name: name.trim(), slug: slugify(name) }).select("id").single();
-    if (error || !data) { avisos.push(`No se pudo crear la categoría "${name}": ${error?.message ?? ""}`); return null; }
-    const id = (data as { id: string }).id;
-    catByName.set(norm(name), id);
-    categoriasCreadas.push(name.trim());
-    return id;
-  };
-
-  // Slug único: el nombre puede repetirse entre productos distintos.
-  const uniqueSlug = async (base: string, ownId: string | null): Promise<string> => {
-    const root = base || "producto";
-    for (let i = 0; i < 50; i++) {
-      const candidate = i === 0 ? root : `${root}-${i + 1}`;
-      const { data } = await db.from("products").select("id").eq("slug", candidate).maybeSingle();
-      if (!data || (ownId && (data as { id: string }).id === ownId)) return candidate;
-    }
-    return `${root}-${Date.now()}`;
-  };
-
-  // Fija las piezas de tienda a la cantidad del Excel y deja el ajuste anotado en
-  // movimientos. Es absoluto a propósito: reimportar el mismo archivo no duplica.
-  const setStock = async (variantId: string, qty: number, etiqueta: string): Promise<boolean> => {
-    if (!tiendaId) return false;
-    const { data: level } = await db.from("stock_levels")
-      .select("id, quantity").eq("variant_id", variantId).eq("location_id", tiendaId).maybeSingle();
-    const current = (level as { id: string; quantity: number } | null)?.quantity ?? 0;
-    if (level && current === qty) return false;
-
-    if (level) {
-      await db.from("stock_levels")
-        .update({ quantity: qty, updated_at: new Date().toISOString() })
-        .eq("id", (level as { id: string }).id);
-    } else {
-      const { error } = await db.from("stock_levels")
-        .insert({ variant_id: variantId, location_id: tiendaId, quantity: qty });
-      if (error) { avisos.push(`${etiqueta}: no se pudo cargar el inventario (${error.message})`); return false; }
-    }
-    await db.from("inventory_movements").insert({
-      variant_id: variantId, location_id: tiendaId, type: "ajuste",
-      quantity: qty - current, reference_type: "import",
-      notes: "Alta masiva por Excel", created_by: staff.id,
-    });
-    return true;
-  };
-
-  let creados = 0, actualizados = 0, sinCambios = 0, variantesNuevas = 0, piezasCargadas = 0;
-
+  // Lo que describe la pieza se toma de la primera fila que lo traiga llena: en
+  // la plantilla sólo va en la primera talla de cada producto.
   for (const g of groups.values()) {
-    // Lo que describe la pieza se toma de la primera fila que lo traiga llena:
-    // en la plantilla sólo va en la primera talla de cada producto.
-    const head = { ...g.rows[0] } as ProductExcelRow;
+    const head = g.head as unknown as Record<string, string>;
     for (const key of PRODUCT_LEVEL_KEYS) {
       if (head[key]) continue;
-      const hit = g.rows.find((r) => r[key]);
-      if (hit) (head[key] as string) = hit[key] as string;
+      const hit = g.rows.find((r) => (r as unknown as Record<string, string>)[key]);
+      if (hit) head[key] = (hit as unknown as Record<string, string>)[key];
     }
+  }
 
-    const categoryId = await ensureCategory(head.categoria);
-    const tags = splitList(head.etiquetas);
+  return { ok: true, productos: [...groups.values()], filas: parsed.length, avisos };
+}
 
-    const productFields = {
-      name: head.nombre,
-      // Código de referencia del producto: el de su primera talla.
-      sku: g.rows[0].sku || null,
-      short_description: head.descripcionCorta || null,
-      long_description: head.descripcionLarga || null,
-      category_id: categoryId,
-      tags,
-      seo_title: head.seoTitulo || null,
-      seo_description: head.seoDescripcion || null,
-    };
+// ── Paso 2: dar de alta una tanda ────────────────────────────────────────────
+// Todo lo que se puede se consulta y se escribe en bloque: antes eran seis u
+// ocho viajes a la base por fila y ahí se iba el tiempo.
+export async function importProductsChunk(
+  productos: ParsedProduct[],
+): Promise<{ ok: boolean; error?: string } & ImportSummary> {
+  const { error: permError, staff } = await requireCatalogStaff();
+  if (permError || !staff) return { ok: false, error: permError ?? "Sin permisos", ...emptySummary() };
+  if (!productos.length) return { ok: true, ...emptySummary() };
 
-    // Se busca por slug; si no aparece, por el código de alguna de sus tallas
-    // (el producto pudo quedar con otro slug al crearse).
-    const select = "id, name, sku, slug, short_description, long_description, category_id, tags, seo_title, seo_description, product_variants(id, sku, price_cents, attributes, position, deleted_at)";
-    let { data: existing } = await db.from("products").select(select).is("deleted_at", null).eq("slug", g.key).maybeSingle();
-    if (!existing) {
-      const { data: byVariant } = await db.from("product_variants")
-        .select("product_id").in("sku", g.rows.map((r) => r.sku)).is("deleted_at", null).limit(1).maybeSingle();
-      const pid = (byVariant as { product_id: string } | null)?.product_id;
-      if (pid) {
-        const { data } = await db.from("products").select(select).is("deleted_at", null).eq("id", pid).maybeSingle();
-        existing = data;
+  const db = createAdminClient();
+  const s = emptySummary();
+  const avisos = s.avisos;
+
+  const { data: loc } = await db
+    .from("inventory_locations").select("id").eq("key", IMPORT_LOCATION).maybeSingle();
+  const tiendaId = (loc as { id: string } | null)?.id ?? null;
+  if (!tiendaId) avisos.push("No se encontró el almacén: no se cargó inventario");
+
+  // ── Categorías: las que falten se crean de un jalón ────────────────────────
+  const { data: cats } = await db.from("categories").select("id, name").is("deleted_at", null);
+  const catByName = new Map(((cats as unknown as { id: string; name: string }[]) ?? []).map((c) => [norm(c.name), c.id]));
+
+  const nuevasCats = [...new Set(
+    productos.map((p) => p.head.categoria.trim()).filter((n) => n && !catByName.has(norm(n))),
+  )];
+  if (nuevasCats.length) {
+    const { data: creadas, error } = await db.from("categories")
+      .insert(nuevasCats.map((name) => ({ name, slug: slugify(name) })))
+      .select("id, name");
+    if (error) avisos.push(`No se pudieron crear categorías (${error.message})`);
+    for (const c of (creadas as unknown as { id: string; name: string }[]) ?? []) {
+      catByName.set(norm(c.name), c.id);
+      s.categoriasCreadas.push(c.name);
+    }
+  }
+
+  // ── Lo que ya existe: dos consultas para toda la tanda ─────────────────────
+  const slugs = productos.map((p) => p.slug);
+  const skus = productos.flatMap((p) => p.rows.map((r) => r.sku));
+
+  const { data: bySlug } = await db.from("products").select(PRODUCT_SELECT).is("deleted_at", null).in("slug", slugs);
+  const existentes = new Map<string, DbProduct>();
+  for (const p of (bySlug as unknown as DbProduct[]) ?? []) existentes.set(p.slug, p);
+
+  // Una pieza pudo quedar con otro slug al crearse: se le busca por el código de
+  // alguna de sus tallas.
+  const faltantes = productos.filter((p) => !existentes.has(p.slug));
+  if (faltantes.length) {
+    const skusFaltantes = faltantes.flatMap((p) => p.rows.map((r) => r.sku));
+    const { data: vs } = await db.from("product_variants")
+      .select("sku, product_id").is("deleted_at", null).in("sku", skusFaltantes);
+    const prodBySku = new Map(((vs as unknown as { sku: string; product_id: string }[]) ?? []).map((v) => [v.sku, v.product_id]));
+    const ids = [...new Set([...prodBySku.values()])];
+    if (ids.length) {
+      const { data: extra } = await db.from("products").select(PRODUCT_SELECT).is("deleted_at", null).in("id", ids);
+      const byId = new Map(((extra as unknown as DbProduct[]) ?? []).map((p) => [p.id, p]));
+      for (const g of faltantes) {
+        const hit = g.rows.map((r) => prodBySku.get(r.sku)).find(Boolean);
+        const prod = hit ? byId.get(hit) : undefined;
+        if (prod) existentes.set(g.slug, prod);
       }
     }
+  }
 
-    let productId: string;
-    let touched = false;
+  const productFieldsOf = (g: ParsedProduct) => ({
+    name: g.head.nombre,
+    // Código de referencia del producto: el de su primera talla.
+    sku: g.rows[0].sku || null,
+    short_description: g.head.descripcionCorta || null,
+    long_description: g.head.descripcionLarga || null,
+    category_id: catByName.get(norm(g.head.categoria)) ?? null,
+    tags: splitList(g.head.etiquetas),
+    seo_title: g.head.seoTitulo || null,
+    seo_description: g.head.seoDescripcion || null,
+  });
 
-    if (!existing) {
-      // Alta: activo (cobrable en el POS desde ya), sin destacar, oculto en la
-      // web y con control de inventario. Las piezas entran por la columna
-      // Inventario.
-      const { data: created, error } = await db.from("products")
-        .insert({
-          ...productFields,
-          ...CREATE_DEFAULTS,
-          slug: await uniqueSlug(g.key, null),
-          created_by: staff.id,
-        })
-        .select("id").single();
-      if (error || !created) { avisos.push(`${head.nombre}: no se pudo crear (${error?.message ?? "error"})`); continue; }
-      productId = (created as { id: string }).id;
-      creados++;
-      touched = true;
+  // ── Altas de producto, en bloque ───────────────────────────────────────────
+  const nuevos = productos.filter((g) => !existentes.has(g.slug));
+  if (nuevos.length) {
+    const { data: creados, error } = await db.from("products")
+      .insert(nuevos.map((g) => ({
+        ...productFieldsOf(g),
+        ...CREATE_DEFAULTS,
+        slug: g.slug,
+        created_by: staff.id,
+      })))
+      .select("id, slug");
+    if (error) {
+      // Un choque de slug tumba el bloque entero, así que se reintenta uno por
+      // uno para que sólo caiga el producto conflictivo y los demás pasen.
+      for (const g of nuevos) {
+        const { data: uno, error: e1 } = await db.from("products")
+          .insert({ ...productFieldsOf(g), ...CREATE_DEFAULTS, slug: g.slug, created_by: staff.id })
+          .select("id, slug").single();
+        if (e1 || !uno) { avisos.push(`${g.head.nombre}: no se pudo crear (${e1 ? skuError(g.rows[0].sku, e1) : "error"})`); continue; }
+        existentes.set(g.slug, { ...(uno as DbProduct), product_variants: [] });
+        s.creados++;
+      }
     } else {
-      const cur = existing as unknown as Record<string, unknown> & { id: string; slug: string };
-      productId = cur.id;
-      // Sólo se escriben los campos que de verdad cambiaron. El estado, el
-      // destacado, la visibilidad y el inventario se respetan como estén.
-      const diff: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(productFields)) {
-        const before = cur[k];
-        const same = Array.isArray(v)
-          ? JSON.stringify([...(before as string[] ?? [])].sort()) === JSON.stringify([...v].sort())
-          : (before ?? null) === (v ?? null);
-        if (!same) diff[k] = v;
-      }
-      // La liga sólo cambia si escribieron un slug distinto a propósito.
-      if (head.slug && head.slug !== cur.slug) diff.slug = await uniqueSlug(head.slug, productId);
-      if (Object.keys(diff).length) {
-        const { error } = await db.from("products").update(diff).eq("id", productId);
-        if (error) { avisos.push(`${head.nombre}: no se pudo actualizar (${error.message})`); continue; }
-        actualizados++;
-        touched = true;
+      for (const p of (creados as unknown as { id: string; slug: string }[]) ?? []) {
+        existentes.set(p.slug, { id: p.id, slug: p.slug, product_variants: [] } as DbProduct);
+        s.creados++;
       }
     }
+  }
 
-    // Tallas: se emparejan por talla; las que están en la BD y no en el Excel se
-    // dejan como están (una importación nunca borra tallas).
-    const dbVariants = (((existing as unknown as { product_variants?: DbVariant[] })?.product_variants) ?? [])
-      .filter((v) => !v.deleted_at);
+  // ── Actualizaciones de producto: sólo lo que de verdad cambió ──────────────
+  const tocados = new Set<string>();
+  for (const g of productos) {
+    const cur = existentes.get(g.slug);
+    if (!cur || nuevos.includes(g)) { if (cur) tocados.add(g.slug); continue; }
+    const campos = productFieldsOf(g);
+    const diff: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(campos)) {
+      const before = cur[k];
+      const same = Array.isArray(v)
+        ? JSON.stringify([...((before as string[]) ?? [])].sort()) === JSON.stringify([...v].sort())
+        : (before ?? null) === (v ?? null);
+      if (!same) diff[k] = v;
+    }
+    // La liga sólo cambia si escribieron un slug distinto a propósito.
+    if (g.head.slug && g.head.slug !== cur.slug) diff.slug = g.head.slug;
+    if (Object.keys(diff).length) {
+      const { error } = await db.from("products").update(diff).eq("id", cur.id);
+      if (error) { avisos.push(`${g.head.nombre}: no se pudo actualizar (${error.message})`); continue; }
+      s.actualizados++;
+      tocados.add(g.slug);
+    }
+  }
+
+  // ── Tallas ────────────────────────────────────────────────────────────────
+  // Se emparejan por código y, si es nueva, por el nombre de talla. Las que
+  // están en la base y no en el Excel se dejan como están: una importación
+  // nunca borra tallas.
+  type NuevaTalla = { product_id: string; sku: string; price_cents: number; attributes: Record<string, string>; position: number };
+  const porCrear: { row: ProductExcelRow; etiqueta: string; fila: NuevaTalla }[] = [];
+  const variantePorSku = new Map<string, DbVariant>();
+  const inventarioPorVariante = new Map<string, number>();
+
+  for (const g of productos) {
+    const cur = existentes.get(g.slug);
+    if (!cur) continue;
+    const dbVariants = (cur.product_variants ?? []).filter((v) => !v.deleted_at);
 
     for (const [i, row] of g.rows.entries()) {
       const talla = row.talla.trim();
-      const etiqueta = `${head.nombre}${talla ? ` talla ${talla}` : ""}`;
+      const etiqueta = `${g.head.nombre}${talla ? ` talla ${talla}` : ""}`;
       const priceCents = Math.round((row.precio ?? 0) * 100);
-      // Se reconoce la talla por su código; si es nueva, por el nombre de talla.
       const match = dbVariants.find((v) => v.sku === row.sku)
         ?? dbVariants.find((v) => (v.attributes?.talla ?? "") === talla);
 
-      let variantId: string;
       if (!match) {
-        const { data, error } = await db.from("product_variants").insert({
-          product_id: productId, sku: row.sku, price_cents: priceCents,
-          attributes: talla ? { talla } : {}, position: i,
-        }).select("id").single();
-        if (error || !data) { avisos.push(`${etiqueta}: no se pudo crear la talla (${error ? skuError(row.sku, error) : "error"})`); continue; }
-        variantId = (data as { id: string }).id;
-        if (existing) variantesNuevas++;
-        touched = true;
-      } else {
-        variantId = match.id;
-        const vdiff: Record<string, unknown> = {};
-        if (match.price_cents !== priceCents) vdiff.price_cents = priceCents;
-        if (match.sku !== row.sku) vdiff.sku = row.sku;
-        if ((match.attributes?.talla ?? "") !== talla) vdiff.attributes = talla ? { talla } : {};
-        if (Object.keys(vdiff).length) {
-          const { error } = await db.from("product_variants").update(vdiff).eq("id", match.id);
-          if (error) { avisos.push(`${etiqueta}: no se pudo actualizar (${skuError(row.sku, error)})`); continue; }
-          if (!touched) actualizados++;
-          touched = true;
-        }
+        porCrear.push({
+          row, etiqueta,
+          fila: {
+            product_id: cur.id, sku: row.sku, price_cents: priceCents,
+            attributes: talla ? { talla } : {}, position: i,
+          },
+        });
+        continue;
       }
 
-      // Inventario de tienda: cantidad absoluta, celda vacía no toca nada.
-      if (row.inventario !== null && await setStock(variantId, row.inventario, etiqueta)) {
-        piezasCargadas++;
-        touched = true;
+      variantePorSku.set(row.sku, match);
+      const vdiff: Record<string, unknown> = {};
+      if (match.price_cents !== priceCents) vdiff.price_cents = priceCents;
+      if (match.sku !== row.sku) vdiff.sku = row.sku;
+      if ((match.attributes?.talla ?? "") !== talla) vdiff.attributes = talla ? { talla } : {};
+      if (Object.keys(vdiff).length) {
+        const { error } = await db.from("product_variants").update(vdiff).eq("id", match.id);
+        if (error) { avisos.push(`${etiqueta}: no se pudo actualizar (${skuError(row.sku, error)})`); continue; }
+        if (!tocados.has(g.slug)) { s.actualizados++; tocados.add(g.slug); }
       }
+      if (row.inventario !== null) inventarioPorVariante.set(match.id, row.inventario);
     }
-
-    if (!touched) sinCambios++;
   }
 
+  if (porCrear.length) {
+    const { data: creadas, error } = await db.from("product_variants")
+      .insert(porCrear.map((p) => p.fila)).select("id, sku");
+    if (error) {
+      for (const p of porCrear) {
+        const { data: una, error: e1 } = await db.from("product_variants").insert(p.fila).select("id, sku").single();
+        if (e1 || !una) { avisos.push(`${p.etiqueta}: no se pudo crear la talla (${e1 ? skuError(p.row.sku, e1) : "error"})`); continue; }
+        s.variantesNuevas++;
+        if (p.row.inventario !== null) inventarioPorVariante.set((una as { id: string }).id, p.row.inventario);
+      }
+    } else {
+      const idBySku = new Map(((creadas as unknown as { id: string; sku: string }[]) ?? []).map((v) => [v.sku, v.id]));
+      for (const p of porCrear) {
+        const id = idBySku.get(p.row.sku);
+        if (!id) continue;
+        s.variantesNuevas++;
+        if (p.row.inventario !== null) inventarioPorVariante.set(id, p.row.inventario);
+      }
+    }
+  }
+
+  // ── Inventario: cantidad absoluta, para que reimportar no duplique ─────────
+  if (tiendaId && inventarioPorVariante.size) {
+    const ids = [...inventarioPorVariante.keys()];
+    const { data: niveles } = await db.from("stock_levels")
+      .select("variant_id, quantity").eq("location_id", tiendaId).in("variant_id", ids);
+    const actual = new Map(((niveles as unknown as { variant_id: string; quantity: number }[]) ?? [])
+      .map((n) => [n.variant_id, n.quantity]));
+
+    const cambian = ids.filter((id) => (actual.get(id) ?? 0) !== inventarioPorVariante.get(id) || !actual.has(id));
+    if (cambian.length) {
+      const { error } = await db.from("stock_levels").upsert(
+        cambian.map((variant_id) => ({
+          variant_id, location_id: tiendaId,
+          quantity: inventarioPorVariante.get(variant_id)!,
+          updated_at: new Date().toISOString(),
+        })),
+        { onConflict: "variant_id,location_id" },
+      );
+      if (error) {
+        avisos.push(`No se pudo cargar el inventario de ${cambian.length} talla(s) (${error.message})`);
+      } else {
+        // El ajuste queda anotado en movimientos, igual que si se hiciera a mano.
+        await db.from("inventory_movements").insert(cambian.map((variant_id) => ({
+          variant_id, location_id: tiendaId, type: "ajuste",
+          quantity: inventarioPorVariante.get(variant_id)! - (actual.get(variant_id) ?? 0),
+          reference_type: "import", notes: "Alta masiva por Excel", created_by: staff.id,
+        })));
+        s.piezasCargadas += cambian.length;
+        for (const g of productos) {
+          if (g.rows.some((r) => { const v = variantePorSku.get(r.sku); return v && cambian.includes(v.id); })) tocados.add(g.slug);
+        }
+      }
+    }
+  }
+
+  s.sinCambios = productos.length - s.creados - s.actualizados;
+  if (s.sinCambios < 0) s.sinCambios = 0;
+  return { ok: true, ...s };
+}
+
+// Se anota al terminar todas las tandas, no en cada una, para que el registro
+// diga cuánto entró en la carga completa.
+export async function logProductsImport(resumen: ImportSummary, filas: number): Promise<void> {
+  const { error: permError, staff } = await requireCatalogStaff();
+  if (permError || !staff) return;
+  const db = createAdminClient();
   await db.from("audit_logs").insert({
     actor_id: staff.id, action: "products.import", entity_type: "products",
-    after: { creados, actualizados, sinCambios, variantesNuevas, piezasCargadas, filas: parsed.length },
+    after: {
+      creados: resumen.creados, actualizados: resumen.actualizados,
+      sinCambios: resumen.sinCambios, variantesNuevas: resumen.variantesNuevas,
+      piezasCargadas: resumen.piezasCargadas, filas,
+    },
   });
-
   revalidatePath("/admin/productos");
   revalidatePath("/admin/inventario");
-  return { ok: true, creados, actualizados, sinCambios, variantesNuevas, piezasCargadas, categoriasCreadas, avisos };
 }
