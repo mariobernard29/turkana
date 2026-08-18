@@ -480,9 +480,15 @@ En el ejemplo hay **dos productos**: un anillo con tres tallas y un cuff que no 
 - **Inventario tienda** son las piezas que hay. Es la cantidad que hay, no la que entra: si pones 10 y vuelves a subir el mismo archivo, quedan 10, no 20. Si dejas la celda **vacía**, el inventario no se toca. Como hay **un solo almacén**, esas piezas quedan disponibles igual en el mostrador que en la tienda en línea.
 - Si la **categoría** no existe, se crea sola.
 
-Sube el archivo con **Importar Excel**. Al terminar sale un resumen verde: cuántos productos se crearon, cuántos se actualizaron, cuántas tallas nuevas y en cuántas se cargó inventario. **Lee los avisos en amarillo**: son las filas que se saltaron y por qué.
+Sube el archivo con **Importar Excel**. Aparece una barra que dice por dónde va (*"350 de 1141 productos"*). **No cierres la pestaña** hasta que termine; si se interrumpe, vuelve a subir el mismo archivo y continúa donde se quedó sin duplicar nada.
+
+Al terminar sale un resumen verde: cuántos productos se crearon, cuántos se actualizaron, cuántas tallas nuevas y en cuántas se cargó inventario. **Lee los avisos en amarillo**: son las filas que se saltaron y por qué.
 
 Las piezas entran **activas** —se pueden cobrar en el POS de inmediato— y **ocultas en la tienda web**, hasta que alguien las publique con fotos y textos revisados.
+
+> **El aviso más común es el código repetido.** Si dos piezas distintas traen el mismo código, sólo entra la primera y la segunda se omite: aparece como *"Fila 137: el código C152 ya está en la fila 133"*. No es un error del sistema, es que ese código ya lo tiene otra pieza. Dale uno nuevo y vuelve a subir el archivo.
+
+> **Cuidado con Excel y los códigos.** Si un código se parece a una fecha (`ENE-26`, `1/26`), Excel lo convierte solo y llega convertido en fecha. Antes de escribirlos, marca la columna del código como **Texto**.
 
 ---
 

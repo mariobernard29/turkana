@@ -545,8 +545,15 @@ Versión 1 · Agosto 2026</p>
 <li><strong>Inventario tienda</strong> son las piezas que hay. Es la cantidad que hay, no la que entra: si pones 10 y vuelves a subir el mismo archivo, quedan 10, no 20. Si dejas la celda <strong>vacía</strong>, el inventario no se toca. Como hay <strong>un solo almacén</strong>, esas piezas quedan disponibles igual en el mostrador que en la tienda en línea.</li>
 <li>Si la <strong>categoría</strong> no existe, se crea sola.</li>
 </ul>
-<p>Sube el archivo con <strong>Importar Excel</strong>. Al terminar sale un resumen verde: cuántos productos se crearon, cuántos se actualizaron, cuántas tallas nuevas y en cuántas se cargó inventario. <strong>Lee los avisos en amarillo</strong>: son las filas que se saltaron y por qué.</p>
+<p>Sube el archivo con <strong>Importar Excel</strong>. Aparece una barra que dice por dónde va (<em>&quot;350 de 1141 productos&quot;</em>). <strong>No cierres la pestaña</strong> hasta que termine; si se interrumpe, vuelve a subir el mismo archivo y continúa donde se quedó sin duplicar nada.</p>
+<p>Al terminar sale un resumen verde: cuántos productos se crearon, cuántos se actualizaron, cuántas tallas nuevas y en cuántas se cargó inventario. <strong>Lee los avisos en amarillo</strong>: son las filas que se saltaron y por qué.</p>
 <p>Las piezas entran <strong>activas</strong> —se pueden cobrar en el POS de inmediato— y <strong>ocultas en la tienda web</strong>, hasta que alguien las publique con fotos y textos revisados.</p>
+<blockquote>
+<p><strong>El aviso más común es el código repetido.</strong> Si dos piezas distintas traen el mismo código, sólo entra la primera y la segunda se omite: aparece como <em>&quot;Fila 137: el código C152 ya está en la fila 133&quot;</em>. No es un error del sistema, es que ese código ya lo tiene otra pieza. Dale uno nuevo y vuelve a subir el archivo.</p>
+</blockquote>
+<blockquote>
+<p><strong>Cuidado con Excel y los códigos.</strong> Si un código se parece a una fecha (<code>ENE-26</code>, <code>1/26</code>), Excel lo convierte solo y llega convertido en fecha. Antes de escribirlos, marca la columna del código como <strong>Texto</strong>.</p>
+</blockquote>
 <hr>
 <h2>18. Inventario</h2>
 <p><strong>Hay un solo almacén.</strong> Las piezas que cargas aquí son las mismas que ve el mostrador y las mismas que ve la tienda en línea. No hay que pasar nada de un lado a otro ni reservar existencias para la web: si hay 10 piezas, hay 10 para quien llegue primero.</p>
