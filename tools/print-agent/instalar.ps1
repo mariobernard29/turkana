@@ -6,6 +6,10 @@
 # caso cae a un acceso directo en la carpeta de Inicio de Windows, que no pide
 # nada. Las dos rutas dejan el agente andando al prender la computadora.
 #
+# En las dos deja también un ícono en el escritorio, para que si alguien cierra
+# la ventana por accidente pueda volver a arrancarlo con doble clic, sin abrir
+# ninguna terminal.
+#
 # Uso (PowerShell, parado en esta carpeta):
 #   .\instalar.ps1
 #   .\instalar.ps1 -Quitar     para desinstalarlo
@@ -14,9 +18,26 @@ param([switch]$Quitar)
 
 $ErrorActionPreference = "Stop"
 $nombre = "Turkana - Agente de impresion"
+$visible = "Impresora Turkana"        # el nombre que ve la gente de la tienda
 $carpeta = $PSScriptRoot
 $cmd = Join-Path $carpeta "iniciar-agente.cmd"
-$acceso = Join-Path ([Environment]::GetFolderPath("Startup")) "$nombre.lnk"
+$icono = Join-Path $carpeta "turkana.ico"
+$acceso = Join-Path ([Environment]::GetFolderPath("Startup")) "$visible.lnk"
+$escritorio = Join-Path ([Environment]::GetFolderPath("Desktop")) "$visible.lnk"
+# La primera versión usaba el nombre interno; se limpia para no dejar dos accesos
+# en Inicio y acabar con dos agentes corriendo.
+$accesoViejo = Join-Path ([Environment]::GetFolderPath("Startup")) "$nombre.lnk"
+
+function Nuevo-Acceso($ruta, $minimizada) {
+  $ws = New-Object -ComObject WScript.Shell
+  $lnk = $ws.CreateShortcut($ruta)
+  $lnk.TargetPath = $cmd
+  $lnk.WorkingDirectory = $carpeta
+  $lnk.WindowStyle = if ($minimizada) { 7 } else { 1 }
+  $lnk.Description = "Imprime los tickets de Turkana en la impresora del mostrador"
+  if (Test-Path $icono) { $lnk.IconLocation = $icono }
+  $lnk.Save()
+}
 
 function Quitar-Tarea {
   try {
@@ -30,9 +51,8 @@ function Quitar-Tarea {
 
 if ($Quitar) {
   Quitar-Tarea
-  if (Test-Path $acceso) {
-    Remove-Item $acceso -Force
-    Write-Host "Acceso directo de Inicio eliminado." -ForegroundColor Yellow
+  foreach ($r in $acceso, $escritorio, $accesoViejo) {
+    if (Test-Path $r) { Remove-Item $r -Force; Write-Host "Quitado: $r" -ForegroundColor Yellow }
   }
   Write-Host "El agente ya no arrancará solo." -ForegroundColor Yellow
   return
@@ -87,18 +107,17 @@ catch {
 }
 
 # ── 2) Respaldo: acceso directo en la carpeta de Inicio ─────────────────────
-if (-not $conTarea) {
-  $ws = New-Object -ComObject WScript.Shell
-  $lnk = $ws.CreateShortcut($acceso)
-  $lnk.TargetPath = $cmd
-  $lnk.WorkingDirectory = $carpeta
-  $lnk.WindowStyle = 7   # minimizada, para que no estorbe en el mostrador
-  $lnk.Description = "Agente de impresion de Turkana"
-  $lnk.Save()
+if (Test-Path $accesoViejo) { Remove-Item $accesoViejo -Force }
 
+if (-not $conTarea) {
+  Nuevo-Acceso $acceso $true
   # Y se arranca ya, para no tener que reiniciar la computadora.
   Start-Process -FilePath $cmd -WorkingDirectory $carpeta -WindowStyle Minimized
 }
+
+# ── 3) Ícono en el escritorio, siempre ──────────────────────────────────────
+# Para que reiniciar el agente sea doble clic en un logo y no abrir una terminal.
+Nuevo-Acceso $escritorio $false
 
 # ── Resultado ───────────────────────────────────────────────────────────────
 Write-Host ""
@@ -106,15 +125,17 @@ if ($conTarea) {
   Write-Host "Listo. El agente quedó como tarea de Windows y ya está corriendo." -ForegroundColor Green
   Write-Host "  Ver si corre:     Get-ScheduledTask -TaskName '$nombre'"
   Write-Host "  Detenerlo:        Stop-ScheduledTask -TaskName '$nombre'"
-  Write-Host "  Desinstalarlo:    .\instalar.ps1 -Quitar"
 } else {
   Write-Host "Listo. El agente quedó en la carpeta de Inicio y ya está corriendo." -ForegroundColor Green
   Write-Host "Queda una ventana minimizada: ahí se ve lo que va imprimiendo. No la cierres."
   Write-Host "  Ver el acceso:    explorer shell:startup"
-  Write-Host "  Desinstalarlo:    .\instalar.ps1 -Quitar"
   Write-Host ""
   Write-Host "Si prefieres la tarea programada, abre PowerShell como administrador" -ForegroundColor DarkGray
   Write-Host "y vuelve a correr este script: se cambia sola." -ForegroundColor DarkGray
 }
+Write-Host ""
+Write-Host "En el escritorio quedó el ícono '$visible': doble clic lo vuelve a arrancar" -ForegroundColor Green
+Write-Host "si alguien cierra la ventana por error."
+Write-Host "  Desinstalar todo: .\instalar.ps1 -Quitar"
 Write-Host ""
 Write-Host "Comprueba en el POS que el icono de impresora esté en verde." -ForegroundColor Cyan

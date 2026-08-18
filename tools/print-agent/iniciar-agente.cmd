@@ -7,6 +7,7 @@ rem
 rem Para que arranque solo con Windows: teclea  shell:startup  en el menu Inicio
 rem y deja ahi un acceso directo a este archivo.
 
+title Impresora Turkana
 cd /d "%~dp0"
 
 if not exist node_modules (
@@ -23,7 +24,8 @@ if not exist .env (
   exit /b 1
 )
 
-echo Agente de impresion Turkana. Deja esta ventana abierta.
+echo  IMPRESORA TURKANA - deja esta ventana abierta.
+echo  Aqui se ve cada ticket que sale. Para cerrarla, Ctrl+C.
 echo.
 
 :bucle
