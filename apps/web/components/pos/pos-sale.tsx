@@ -218,8 +218,10 @@ export function PosSale({
 
   return (
     <div className="grid h-full lg:grid-cols-[1fr_380px]">
-      {/* Grid de productos */}
-      <div className="flex min-h-0 flex-col p-4">
+      {/* Grid de productos. min-w-0 es lo que deja que la columna se encoja: sin
+          eso, la fila de categorías (que es más ancha que la pantalla) estira la
+          columna del grid y se lleva por delante el ticket y el menú. */}
+      <div className="flex min-h-0 min-w-0 flex-col p-4">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <div className="relative min-w-[180px] flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
@@ -272,7 +274,9 @@ export function PosSale({
           <div className="mb-4 flex gap-2 overflow-x-auto pb-1.5 [scrollbar-width:thin]">
             {/* "Todos" se queda fijo: quitar el filtro no debe obligar a regresar
                 la barra hasta el principio. */}
-            <div className="sticky left-0 z-10 shrink-0 bg-[#e6e2da] pr-2">
+            {/* El `after` es un degradado pegado a su orilla: sin él, las pastillas
+                que pasan por debajo se cortan en seco y parecen un error. */}
+            <div className="sticky left-0 z-10 shrink-0 bg-[#e6e2da] pr-2 after:absolute after:inset-y-0 after:left-full after:w-4 after:bg-gradient-to-r after:from-[#e6e2da] after:to-transparent after:content-['']">
               <button
                 onClick={() => setActiveCategory("")}
                 className={cn("whitespace-nowrap rounded-full border px-4 py-2 text-sm transition-colors", !activeCategory ? "border-ink bg-ink text-cream" : "border-ink/15 bg-white text-ink hover:border-gold")}
