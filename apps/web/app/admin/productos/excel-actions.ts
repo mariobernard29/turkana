@@ -33,11 +33,16 @@ async function requireCatalogStaff() {
 
 const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v);
 
-// El código es único entre tallas vivas: sin traducir, el choque llega como
-// "duplicate key value violates unique constraint", que no dice qué hacer.
-function skuError(sku: string, error: { code?: string; message: string }): string {
-  if (error.code === "23505") return `el código ${sku} ya lo tiene otra pieza del catálogo`;
-  return error.message;
+// Sin traducir, un choque llega como "duplicate key value violates unique
+// constraint ..." y no dice qué hacer. Puede ser por el código de la talla o por
+// la liga del producto, que son problemas distintos.
+function skuError(sku: string, error: { code?: string; message?: string; details?: string }): string {
+  const texto = `${error.message ?? ""} ${error.details ?? ""}`;
+  if (error.code === "23505") {
+    if (/slug/i.test(texto)) return "ya hay otra pieza con esa liga (slug); ponle un slug distinto en el Excel";
+    return `el código ${sku} ya lo tiene otra pieza del catálogo`;
+  }
+  return error.message ?? "error";
 }
 
 // ── Exportar ─────────────────────────────────────────────────────────────────
@@ -330,21 +335,46 @@ export async function importProductsChunk(
   const tiendaId = (loc as { id: string } | null)?.id ?? null;
   if (!tiendaId) avisos.push("No se encontró el almacén: no se cargó inventario");
 
-  // ── Categorías: las que falten se crean de un jalón ────────────────────────
+  // ── Categorías: las que falten se crean ───────────────────────────────────
   const { data: cats } = await db.from("categories").select("id, name").is("deleted_at", null);
   const catByName = new Map(((cats as unknown as { id: string; name: string }[]) ?? []).map((c) => [norm(c.name), c.id]));
+
+  // Una categoría borrada desde el admin sigue ocupando su slug —el índice único
+  // no distingue borradas—, así que crearla otra vez choca. Revivirla es lo que
+  // espera quien la vuelve a escribir en el Excel.
+  const crearCategoria = async (name: string): Promise<string | null> => {
+    const slug = slugify(name);
+    const { data, error } = await db.from("categories").insert({ name, slug }).select("id").single();
+    if (!error && data) { s.categoriasCreadas.push(name); return (data as { id: string }).id; }
+    if (error?.code === "23505") {
+      const { data: revivida } = await db.from("categories")
+        .update({ name, deleted_at: null }).eq("slug", slug).select("id").single();
+      if (revivida) { s.categoriasCreadas.push(name); return (revivida as { id: string }).id; }
+    }
+    avisos.push(`No se pudo crear la categoría "${name}" (${error?.message ?? "error"})`);
+    return null;
+  };
 
   const nuevasCats = [...new Set(
     productos.map((p) => p.head.categoria.trim()).filter((n) => n && !catByName.has(norm(n))),
   )];
   if (nuevasCats.length) {
+    // En bloque cuando se puede; si una choca, el insert entero se cae y antes se
+    // llevaba las demás por delante: los productos de toda la tanda quedaban sin
+    // categoría. Por eso el reintento es una por una.
     const { data: creadas, error } = await db.from("categories")
       .insert(nuevasCats.map((name) => ({ name, slug: slugify(name) })))
       .select("id, name");
-    if (error) avisos.push(`No se pudieron crear categorías (${error.message})`);
-    for (const c of (creadas as unknown as { id: string; name: string }[]) ?? []) {
-      catByName.set(norm(c.name), c.id);
-      s.categoriasCreadas.push(c.name);
+    if (!error) {
+      for (const c of (creadas as unknown as { id: string; name: string }[]) ?? []) {
+        catByName.set(norm(c.name), c.id);
+        s.categoriasCreadas.push(c.name);
+      }
+    } else {
+      for (const name of nuevasCats) {
+        const id = await crearCategoria(name);
+        if (id) catByName.set(norm(name), id);
+      }
     }
   }
 
