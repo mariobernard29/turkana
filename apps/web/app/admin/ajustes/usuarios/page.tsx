@@ -22,7 +22,10 @@ export default async function UsuariosSettingsPage() {
           <ArrowLeft className="h-4 w-4" /> Ajustes
         </Link>
         <h1 className="mt-2 text-3xl text-ink">Usuarios del sistema</h1>
-        <p className="mt-1 text-sm text-muted">Crea, activa y asigna roles al personal.</p>
+        <p className="mt-1 text-sm text-muted">
+          Crea, activa y asigna roles al personal. El número de empleado es con lo que
+          entran al POS, en lugar del correo.
+        </p>
       </div>
 
       {isAdmin && rolesData ? (

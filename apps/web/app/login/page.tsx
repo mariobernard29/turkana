@@ -1,13 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
-import { login } from "./actions";
+import { StaffLoginForm } from "@/components/staff-login-form";
 
 export default async function LoginPage({
   searchParams,
 }: {
   searchParams: Promise<{ redirect?: string; error?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, redirect } = await searchParams;
   const errorMsg = error && error !== "{}" ? error : error === "{}"
     ? "No se pudo iniciar sesión. Verifica tus credenciales y que el Auth Hook esté configurado."
     : null;
@@ -26,29 +26,7 @@ export default async function LoginPage({
           </p>
         )}
 
-        <form action={login} className="space-y-4">
-          <RedirectField searchParams={searchParams} />
-          <input
-            name="email"
-            type="email"
-            required
-            placeholder="Correo"
-            className="w-full rounded-lg border border-ink/15 bg-white px-4 py-3 text-sm outline-none focus:border-gold"
-          />
-          <input
-            name="password"
-            type="password"
-            required
-            placeholder="Contraseña"
-            className="w-full rounded-lg border border-ink/15 bg-white px-4 py-3 text-sm outline-none focus:border-gold"
-          />
-          <button
-            type="submit"
-            className="w-full rounded-full bg-ink py-3 text-sm uppercase tracking-widest text-cream transition-colors hover:bg-gold-dark"
-          >
-            Entrar
-          </button>
-        </form>
+        <StaffLoginForm redirectTo={redirect ?? "/admin"} />
 
         <Link href="/recuperar" className="mt-5 block text-center text-sm text-muted transition-colors hover:text-gold">
           ¿Olvidaste tu contraseña?
@@ -56,13 +34,4 @@ export default async function LoginPage({
       </div>
     </main>
   );
-}
-
-async function RedirectField({
-  searchParams,
-}: {
-  searchParams: Promise<{ redirect?: string }>;
-}) {
-  const { redirect } = await searchParams;
-  return <input type="hidden" name="redirect" value={redirect ?? "/admin"} />;
 }
