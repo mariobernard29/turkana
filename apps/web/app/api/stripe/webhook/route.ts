@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyOrderPaid, checkLowStockAfterSale } from "@/lib/admin-alerts";
+import { MAIN_LOCATION_KEY, MAIN_LOCATION_LABEL } from "@/lib/inventory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,13 +53,13 @@ async function fulfillOrder(
     });
   }
 
-  // Descontar stock del almacén e-commerce.
+  // Descontar stock del almacén (el mismo del mostrador).
   const { data: items } = await db
     .from("order_items").select("variant_id, quantity, is_service").eq("order_id", orderId);
   for (const it of (items as unknown as { variant_id: string | null; quantity: number; is_service: boolean }[]) ?? []) {
     if (it.is_service || !it.variant_id) continue;
     await db.rpc("decrement_stock", {
-      p_variant: it.variant_id, p_location_key: "ecommerce",
+      p_variant: it.variant_id, p_location_key: MAIN_LOCATION_KEY,
       p_qty: it.quantity, p_ref_type: "order", p_ref_id: orderId,
     });
   }
@@ -84,11 +85,11 @@ async function fulfillOrder(
   // Confirmación detallada al cliente + alerta de venta al admin (tras el pago).
   await notifyOrderPaid(orderId);
 
-  // Alerta de inventario bajo (tienda en línea).
+  // Alerta de inventario bajo.
   const saleEntries = ((items as unknown as { variant_id: string | null; quantity: number; is_service: boolean }[]) ?? [])
     .filter((it) => !it.is_service && it.variant_id)
     .map((it) => ({ variantId: it.variant_id as string, qty: it.quantity }));
-  await checkLowStockAfterSale(saleEntries, "ecommerce", "Tienda en línea");
+  await checkLowStockAfterSale(saleEntries, MAIN_LOCATION_KEY, MAIN_LOCATION_LABEL);
 }
 
 export async function POST(req: Request) {

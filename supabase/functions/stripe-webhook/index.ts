@@ -53,7 +53,8 @@ async function fulfillOrder(
     if (it.is_service || !it.variant_id) continue;
     await db.rpc("decrement_stock", {
       p_variant: it.variant_id,
-      p_location_key: "ecommerce",
+      // Almacén único: el mostrador y la web comparten existencias.
+      p_location_key: "tienda",
       p_qty: it.quantity,
       p_ref_type: "order",
       p_ref_id: orderId,

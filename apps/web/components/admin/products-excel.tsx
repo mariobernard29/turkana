@@ -62,7 +62,7 @@ export function ProductsExcel() {
         <button
           onClick={() => fileRef.current?.click()}
           disabled={busy !== null}
-          title="Sube el Excel: da de alta los productos nuevos como borrador y actualiza sólo lo que cambió"
+          title="Sube el Excel: da de alta los productos nuevos y actualiza sólo lo que cambió"
           className="inline-flex items-center gap-2 rounded-full border border-ink/15 px-4 py-2.5 text-sm text-ink hover:border-gold disabled:opacity-50"
         >
           {busy === "import" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
@@ -84,8 +84,8 @@ export function ProductsExcel() {
       <p className="mt-2 max-w-md text-xs text-muted">
         Una fila por talla, cada una con su propio código: las filas que comparten el
         nombre son el mismo producto. La columna <strong>Inventario tienda</strong> deja
-        las piezas que hay en el mostrador (vacía = no se toca); el e-commerce se surte
-        desde Inventario. Los productos entran <strong>activos</strong> —se pueden cobrar
+        las piezas que hay (vacía = no se toca); es el almacén único, así que sirven
+        igual al mostrador y a la web. Los productos entran <strong>activos</strong> —se pueden cobrar
         en el POS de inmediato— y ocultos en la tienda web hasta que los publiques.
       </p>
 

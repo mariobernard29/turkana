@@ -3,15 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { MAIN_LOCATION_KEY } from "@/lib/inventory";
 
 type DB = ReturnType<typeof createAdminClient>;
-type LocKey = "tienda" | "ecommerce";
 
-async function getLocations(db: DB): Promise<Record<string, string>> {
-  const { data } = await db.from("inventory_locations").select("id, key");
-  const map: Record<string, string> = {};
-  for (const l of (data as unknown as { id: string; key: string }[]) ?? []) map[l.key] = l.id;
-  return map;
+async function mainLocationId(db: DB): Promise<string | null> {
+  const { data } = await db
+    .from("inventory_locations").select("id").eq("key", MAIN_LOCATION_KEY).maybeSingle();
+  return (data as { id: string } | null)?.id ?? null;
 }
 
 async function ensureStock(db: DB, variantId: string, locationId: string) {
@@ -30,10 +29,11 @@ async function ensureStock(db: DB, variantId: string, locationId: string) {
   return created as unknown as { id: string; quantity: number };
 }
 
+// Hay un solo almacén: el mostrador y la tienda en línea comparten existencias,
+// así que ya no se elige a dónde va el movimiento ni se traspasa entre bodegas.
 export async function applyMovement(input: {
   variantId: string;
   type: "entrada" | "salida" | "ajuste";
-  locationKey: LocKey;
   quantity: number;
   notes?: string;
 }): Promise<{ ok: boolean; error?: string }> {
@@ -42,9 +42,8 @@ export async function applyMovement(input: {
     return { ok: false, error: "Cantidad inválida" };
 
   const db = createAdminClient();
-  const locs = await getLocations(db);
-  const locId = locs[input.locationKey];
-  if (!locId) return { ok: false, error: "Almacén inválido" };
+  const locId = await mainLocationId(db);
+  if (!locId) return { ok: false, error: "Almacén no configurado" };
 
   const row = await ensureStock(db, input.variantId, locId);
   const current = row.quantity;
@@ -78,44 +77,6 @@ export async function applyMovement(input: {
   });
 
   revalidatePath("/admin/inventario");
-  return { ok: true };
-}
-
-export async function transferStock(input: {
-  variantId: string;
-  fromKey: LocKey;
-  toKey: LocKey;
-  quantity: number;
-  notes?: string;
-}): Promise<{ ok: boolean; error?: string }> {
-  const staff = await requireStaff();
-  if (input.fromKey === input.toKey) return { ok: false, error: "Selecciona almacenes distintos" };
-  if (!Number.isInteger(input.quantity) || input.quantity <= 0)
-    return { ok: false, error: "Cantidad inválida" };
-
-  const db = createAdminClient();
-  const locs = await getLocations(db);
-  const fromId = locs[input.fromKey];
-  const toId = locs[input.toKey];
-  if (!fromId || !toId) return { ok: false, error: "Almacén inválido" };
-
-  const fromRow = await ensureStock(db, input.variantId, fromId);
-  if (fromRow.quantity < input.quantity)
-    return { ok: false, error: "Stock insuficiente en el almacén de origen" };
-  const toRow = await ensureStock(db, input.variantId, toId);
-
-  await db.from("stock_levels")
-    .update({ quantity: fromRow.quantity - input.quantity, updated_at: new Date().toISOString() })
-    .eq("id", fromRow.id);
-  await db.from("stock_levels")
-    .update({ quantity: toRow.quantity + input.quantity, updated_at: new Date().toISOString() })
-    .eq("id", toRow.id);
-
-  await db.from("inventory_movements").insert([
-    { variant_id: input.variantId, location_id: fromId, type: "traspaso", quantity: -input.quantity, reference_type: "transfer", notes: input.notes || null, created_by: staff.id },
-    { variant_id: input.variantId, location_id: toId, type: "traspaso", quantity: input.quantity, reference_type: "transfer", notes: input.notes || null, created_by: staff.id },
-  ]);
-
-  revalidatePath("/admin/inventario");
+  revalidatePath("/pos");
   return { ok: true };
 }

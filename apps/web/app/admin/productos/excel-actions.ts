@@ -9,6 +9,7 @@ import ExcelJS from "exceljs";
 import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { slugify } from "@/lib/slug";
+import { MAIN_LOCATION_KEY } from "@/lib/inventory";
 import {
   PRODUCT_COLUMNS, PRODUCT_LEVEL_KEYS, CREATE_DEFAULTS, EXAMPLE_ROWS,
   clean, columnForHeader, norm, parseCount, parseNumber, splitList,
@@ -20,9 +21,9 @@ const ADMIN_ROLES = ["super_admin", "admin", "gerente", "inventarios"];
 const HEADER_BG = "FFF3EFE7";
 const NOTE_BG = "FFFBF8F3";
 
-// El Excel sólo carga la tienda física; el e-commerce se surte a mano desde
-// Inventario, para no mandar a la web piezas que están en el mostrador.
-const IMPORT_LOCATION = "tienda";
+// Hay un solo almacén: lo que carga el Excel queda disponible igual en el
+// mostrador que en la tienda en línea.
+const IMPORT_LOCATION = MAIN_LOCATION_KEY;
 
 async function requireCatalogStaff() {
   const staff = await requireStaff();

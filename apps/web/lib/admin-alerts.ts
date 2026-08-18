@@ -204,7 +204,7 @@ export async function notifyCashCut(r: CashCutReport) {
 // ── Inventario bajo ─────────────────────────────────────────────────────────────
 export async function checkLowStockAfterSale(
   entries: { variantId: string; qty: number }[],
-  locationKey: "tienda" | "ecommerce",
+  locationKey: string,
   locationLabel: string,
 ) {
   const { emails, threshold } = await getAlertConfig();

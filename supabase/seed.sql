@@ -50,10 +50,9 @@ select r.id, p.id from roles r join permissions p
 where r.key = 'inventarios'
 on conflict do nothing;
 
--- ── Almacenes (catálogo compartido, stock independiente) ───────────────────
+-- ── Almacén (uno solo: el mostrador y la web comparten existencias) ────────
 insert into inventory_locations (key, name, type) values
-  ('tienda','Tienda Física','physical'),
-  ('ecommerce','E-commerce','online')
+  ('tienda','Almacén principal','physical')
 on conflict (key) do nothing;
 
 -- ── Configuración global ───────────────────────────────────────────────────

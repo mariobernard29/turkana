@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { MAIN_LOCATION_KEY } from "@/lib/inventory";
 import { ShopHeader } from "@/components/shop/header";
 import { ShopFooter } from "@/components/shop/footer";
 import { ProductCard, type CatalogProduct } from "@/components/shop/product-card";
@@ -56,12 +57,13 @@ async function loadProduct(slug: string) {
   return p;
 }
 
-// Stock del almacén e-commerce (anon no puede leer stock_levels por RLS).
+// Stock del almacén (anon no puede leer stock_levels por RLS). Es el mismo que
+// ve el mostrador: hay una sola bolsa de existencias para la web y el POS.
 async function loadStock(variantIds: string[]): Promise<Record<string, number>> {
   if (variantIds.length === 0) return {};
   const db = createAdminClient();
   const { data: loc } = await db
-    .from("inventory_locations").select("id").eq("key", "ecommerce").maybeSingle();
+    .from("inventory_locations").select("id").eq("key", MAIN_LOCATION_KEY).maybeSingle();
   if (!loc) return {};
   const { data } = await db
     .from("stock_levels")

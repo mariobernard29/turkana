@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Search, X, Loader2, ArrowRightLeft } from "lucide-react";
-import { applyMovement, transferStock } from "@/app/admin/inventario/actions";
+import { Search, X, Loader2 } from "lucide-react";
+import { applyMovement } from "@/app/admin/inventario/actions";
 import { cn } from "@/lib/utils";
 
 export type InvRow = {
@@ -11,13 +11,18 @@ export type InvRow = {
   sku: string;
   productName: string;
   attributesText: string;
-  stockTienda: number;
-  stockEcommerce: number;
+  stock: number;
+  reserved: number;
 };
 
-type Op = "entrada" | "salida" | "ajuste" | "traspaso";
+type Op = "entrada" | "salida" | "ajuste";
 const OP_LABEL: Record<Op, string> = {
-  entrada: "Entrada", salida: "Salida", ajuste: "Ajuste", traspaso: "Traspaso",
+  entrada: "Entrada", salida: "Salida", ajuste: "Ajuste",
+};
+const OP_HELP: Record<Op, string> = {
+  entrada: "Llegó mercancía: se suma a lo que ya hay.",
+  salida: "Salió una pieza que no fue una venta (dañada, muestra): se resta.",
+  ajuste: "Después de contar físicamente: deja la cantidad exacta que escribas.",
 };
 
 export function InventoryManager({ rows }: { rows: InvRow[] }) {
@@ -32,6 +37,9 @@ export function InventoryManager({ rows }: { rows: InvRow[] }) {
       (r) => r.productName.toLowerCase().includes(q) || r.sku.toLowerCase().includes(q),
     );
   }, [rows, query]);
+
+  // La columna de apartadas sólo estorba si nadie tiene piezas comprometidas.
+  const anyReserved = rows.some((r) => r.reserved > 0);
 
   return (
     <div>
@@ -54,9 +62,9 @@ export function InventoryManager({ rows }: { rows: InvRow[] }) {
             <tr>
               <th className="px-6 py-4 font-medium">Producto</th>
               <th className="px-6 py-4 font-medium">SKU</th>
-              <th className="px-6 py-4 text-center font-medium">Tienda</th>
-              <th className="px-6 py-4 text-center font-medium">E-commerce</th>
-              <th className="px-6 py-4 text-center font-medium">Total</th>
+              <th className="px-6 py-4 text-center font-medium">Existencias</th>
+              {anyReserved && <th className="px-6 py-4 text-center font-medium">Apartadas</th>}
+              {anyReserved && <th className="px-6 py-4 text-center font-medium">Disponibles</th>}
               <th className="px-6 py-4 text-right font-medium">Acción</th>
             </tr>
           </thead>
@@ -68,9 +76,15 @@ export function InventoryManager({ rows }: { rows: InvRow[] }) {
                   {r.attributesText && <p className="text-xs text-muted">{r.attributesText}</p>}
                 </td>
                 <td className="px-6 py-4 text-muted">{r.sku}</td>
-                <td className={cn("px-6 py-4 text-center", r.stockTienda === 0 && "text-red-500")}>{r.stockTienda}</td>
-                <td className={cn("px-6 py-4 text-center", r.stockEcommerce === 0 && "text-red-500")}>{r.stockEcommerce}</td>
-                <td className="px-6 py-4 text-center text-ink">{r.stockTienda + r.stockEcommerce}</td>
+                <td className={cn("px-6 py-4 text-center tabular-nums", r.stock === 0 && "text-red-500")}>{r.stock}</td>
+                {anyReserved && (
+                  <td className={cn("px-6 py-4 text-center tabular-nums", r.reserved > 0 ? "text-amber-700" : "text-muted")}>
+                    {r.reserved}
+                  </td>
+                )}
+                {anyReserved && (
+                  <td className="px-6 py-4 text-center tabular-nums text-ink">{Math.max(0, r.stock - r.reserved)}</td>
+                )}
                 <td className="px-6 py-4 text-right">
                   <button
                     onClick={() => setActive(r)}
@@ -82,7 +96,11 @@ export function InventoryManager({ rows }: { rows: InvRow[] }) {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={6} className="px-6 py-16 text-center text-muted">Sin resultados</td></tr>
+              <tr>
+                <td colSpan={anyReserved ? 6 : 4} className="px-6 py-16 text-center text-muted">
+                  {rows.length === 0 ? "No hay productos dados de alta todavía" : "Sin resultados"}
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
@@ -109,9 +127,6 @@ function MovementModal({
   onDone: () => void;
 }) {
   const [op, setOp] = useState<Op>("entrada");
-  const [locationKey, setLocationKey] = useState<"tienda" | "ecommerce">("tienda");
-  const [fromKey, setFromKey] = useState<"tienda" | "ecommerce">("tienda");
-  const [toKey, setToKey] = useState<"tienda" | "ecommerce">("ecommerce");
   const [quantity, setQuantity] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -121,15 +136,21 @@ function MovementModal({
     e.preventDefault();
     setError(null);
     setBusy(true);
-    const qty = Number(quantity);
-    const res =
-      op === "traspaso"
-        ? await transferStock({ variantId: row.variantId, fromKey, toKey, quantity: qty, notes })
-        : await applyMovement({ variantId: row.variantId, type: op, locationKey, quantity: qty, notes });
+    const res = await applyMovement({
+      variantId: row.variantId, type: op, quantity: Number(quantity), notes,
+    });
     setBusy(false);
     if (!res.ok) { setError(res.error ?? "Error"); return; }
     onDone();
   };
+
+  const qty = Number(quantity);
+  // Lo que va a quedar tras aplicar, para cachar el error antes de guardarlo.
+  const resultado = !quantity || !Number.isFinite(qty)
+    ? null
+    : op === "entrada" ? row.stock + qty
+    : op === "salida" ? row.stock - qty
+    : qty;
 
   const field = "w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm outline-none focus:border-gold";
   const label = "mb-1.5 block text-xs uppercase tracking-wider text-muted";
@@ -140,13 +161,16 @@ function MovementModal({
         <div className="mb-4 flex items-start justify-between">
           <div>
             <h3 className="text-lg text-ink">{row.productName}</h3>
-            <p className="text-xs text-muted">{row.sku} · Tienda {row.stockTienda} · E-commerce {row.stockEcommerce}</p>
+            <p className="text-xs text-muted">
+              {row.sku} · {row.stock} en existencia
+              {row.reserved > 0 && ` · ${row.reserved} apartadas`}
+            </p>
           </div>
           <button onClick={onClose} className="text-muted hover:text-ink"><X className="h-5 w-5" /></button>
         </div>
 
         {/* Selector de operación */}
-        <div className="mb-4 grid grid-cols-4 gap-1 rounded-lg bg-cream p-1">
+        <div className="mb-2 grid grid-cols-3 gap-1 rounded-lg bg-cream p-1">
           {(Object.keys(OP_LABEL) as Op[]).map((o) => (
             <button
               key={o}
@@ -161,36 +185,9 @@ function MovementModal({
             </button>
           ))}
         </div>
+        <p className="mb-4 text-xs text-muted">{OP_HELP[op]}</p>
 
         <form onSubmit={submit} className="space-y-4">
-          {op === "traspaso" ? (
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
-                <label className={label}>De</label>
-                <select className={field} value={fromKey} onChange={(e) => setFromKey(e.target.value as "tienda" | "ecommerce")}>
-                  <option value="tienda">Tienda</option>
-                  <option value="ecommerce">E-commerce</option>
-                </select>
-              </div>
-              <ArrowRightLeft className="mb-3 h-4 w-4 shrink-0 text-muted" />
-              <div className="flex-1">
-                <label className={label}>A</label>
-                <select className={field} value={toKey} onChange={(e) => setToKey(e.target.value as "tienda" | "ecommerce")}>
-                  <option value="ecommerce">E-commerce</option>
-                  <option value="tienda">Tienda</option>
-                </select>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <label className={label}>Almacén</label>
-              <select className={field} value={locationKey} onChange={(e) => setLocationKey(e.target.value as "tienda" | "ecommerce")}>
-                <option value="tienda">Tienda</option>
-                <option value="ecommerce">E-commerce</option>
-              </select>
-            </div>
-          )}
-
           <div>
             <label className={label}>
               {op === "ajuste" ? "Cantidad final (absoluta)" : "Cantidad"}
@@ -201,13 +198,21 @@ function MovementModal({
               className={field}
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
+              autoFocus
               required
             />
+            {resultado !== null && (
+              <p className={cn("mt-1.5 text-xs", resultado < 0 ? "text-red-600" : "text-muted")}>
+                {resultado < 0
+                  ? `No alcanza: sólo hay ${row.stock}`
+                  : `Queda en ${resultado} pieza${resultado === 1 ? "" : "s"}`}
+              </p>
+            )}
           </div>
 
           <div>
             <label className={label}>Notas (opcional)</label>
-            <input className={field} value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <input className={field} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Por qué se movió" />
           </div>
 
           {error && <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</p>}

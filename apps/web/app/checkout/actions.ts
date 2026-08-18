@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
 import { getShippingSettings } from "@/lib/settings";
+import { MAIN_LOCATION_KEY } from "@/lib/inventory";
 
 const TAX_RATE = 0.16;
 
@@ -47,10 +48,11 @@ export async function startCheckout(
   }[]) ?? [];
   const vmap = new Map(variants.map((v) => [v.id, v]));
 
-  // ── Stock disponible del almacén e-commerce ────────────────────────────────
+  // ── Stock disponible del almacén ───────────────────────────────────────────
+  // Es el mismo que ve el mostrador: no hay existencias apartadas para la web.
   const { data: loc } = await db
-    .from("inventory_locations").select("id").eq("key", "ecommerce").maybeSingle();
-  if (!loc) return { ok: false, error: "Almacén e-commerce no configurado" };
+    .from("inventory_locations").select("id").eq("key", MAIN_LOCATION_KEY).maybeSingle();
+  if (!loc) return { ok: false, error: "Almacén no configurado" };
   const { data: sData } = await db
     .from("stock_levels")
     .select("variant_id, quantity, reserved")

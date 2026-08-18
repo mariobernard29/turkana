@@ -39,7 +39,7 @@ export const PRODUCT_COLUMNS: ColumnDef[] = [
   { key: "talla", header: "Talla", width: 12, note: "Una talla por fila. Vacío = pieza única.", aliases: ["tallas", "medida", "medidas"] },
   { key: "sku", header: "Código (SKU)", width: 16, note: "Obligatorio. Cada talla lleva su propio código.", aliases: ["código", "codigo", "sku", "código o sku", "codigo o sku", "código de talla", "codigo de talla"] },
   { key: "precio", header: "Precio", width: 12, note: "Obligatorio. En pesos, de esta talla." },
-  { key: "inventario", header: "Inventario tienda", width: 16, note: "Piezas que hay en tienda. Vacío = no se toca. El e-commerce se carga aparte.", aliases: ["inventario", "existencias", "piezas", "stock", "existencias tienda", "stock tienda"] },
+  { key: "inventario", header: "Inventario tienda", width: 16, note: "Piezas que hay. Vacío = no se toca. Es el almacén único: sirve al mostrador y a la web.", aliases: ["inventario", "existencias", "piezas", "stock", "existencias tienda", "stock tienda"] },
   { key: "descripcionCorta", header: "Descripción corta", width: 40 },
   { key: "descripcionLarga", header: "Descripción larga", width: 60 },
   { key: "categoria", header: "Categoría", width: 20, note: "Si no existe, se crea." },
