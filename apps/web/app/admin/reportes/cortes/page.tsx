@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { storeDayRange } from "@/lib/dates";
 import { formatMXN } from "@/lib/utils";
 import { CutPrintButton } from "@/components/admin/cut-print-button";
 import { loadOpenSessions } from "@/lib/cash-report";
@@ -36,8 +37,9 @@ async function load(f: Filters): Promise<{ rows: Row[]; names: Record<string, st
       .eq("status", "closed")
       .order("closed_at", { ascending: false })
       .limit(200);
-    if (f.desde) q = q.gte("closed_at", `${f.desde}T00:00:00`);
-    if (f.hasta) q = q.lte("closed_at", `${f.hasta}T23:59:59`);
+    // Los límites son días de la tienda, no cadenas sueltas que Postgres lea en UTC.
+    if (f.desde) q = q.gte("closed_at", storeDayRange(f.desde).from.toISOString());
+    if (f.hasta) q = q.lt("closed_at", storeDayRange(f.hasta).to.toISOString());
     if (f.lote) q = q.ilike("id", `${f.lote}%`);
     const { data } = await q;
     const rows = (data as unknown as Row[]) ?? [];

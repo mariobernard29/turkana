@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { formatMXN } from "@/lib/utils";
 import { methodLabel } from "@/lib/payments";
 import { KpiCard } from "@/components/admin/kpi-card";
+import { businessRange } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -10,18 +11,12 @@ type Range = "day" | "week" | "month" | "year";
 const RANGE_LABEL: Record<Range, string> = { day: "Hoy", week: "Semana", month: "Mes", year: "Año" };
 const PAID = ["paid", "completed", "delivered"];
 
-function startOf(range: Range): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  if (range === "week") d.setDate(d.getDate() - 7);
-  else if (range === "month") d.setMonth(d.getMonth() - 1);
-  else if (range === "year") d.setFullYear(d.getFullYear() - 1);
-  return d;
-}
+
 
 async function loadReport(range: Range) {
   const db = createAdminClient();
-  const start = startOf(range).toISOString();
+  // Anclado al día del negocio (Los Mochis), no al reloj UTC del servidor.
+  const start = businessRange(range).from.toISOString();
   const safe = async <T,>(fn: () => Promise<T>, fb: T) => { try { return await fn(); } catch { return fb; } };
 
   const sales = await safe(async () => {

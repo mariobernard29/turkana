@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveRefresh } from "@/components/live-refresh";
 import { Plus } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAll } from "@/lib/supabase/paginate";
@@ -53,6 +54,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
+      <LiveRefresh tables={["products", "product_variants", "categories", "stock_levels"]} />
       <details className="mb-8 rounded-2xl border border-ink/10 bg-white p-4">
         <summary className="cursor-pointer select-none text-sm font-medium text-ink">
           Categorías <span className="text-muted">({categories.length})</span>

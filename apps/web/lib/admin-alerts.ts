@@ -1,5 +1,6 @@
 // Alertas al correo de administración: ventas en línea, corte de caja e inventario bajo.
 import { createAdminClient } from "@/lib/supabase/admin";
+import { formatStore } from "@/lib/dates";
 import { CASH_NEGATIVE_TYPES, countedPairs, expectedPairs, movementLabel, summaryPairs } from "@/lib/cash";
 import type { CashCutReport } from "@/lib/cash-report";
 
@@ -134,7 +135,7 @@ export async function notifyOrderPaid(orderId: string) {
   // Alerta al ADMIN (detalle interno completo).
   if (adminEmails.length) {
     const adminInner = `
-      <p style="margin:0 0 12px"><strong>Folio ${o.order_number}</strong> · ${new Date(o.created_at).toLocaleString("es-MX")}</p>
+      <p style="margin:0 0 12px"><strong>Folio ${o.order_number}</strong> · ${formatStore(o.created_at)}</p>
       <p style="margin:0 0 4px;font-size:13px"><strong>Cliente:</strong> ${cust?.full_name ?? "—"}</p>
       <p style="margin:0 0 4px;font-size:13px"><strong>Correo:</strong> ${cust?.email ?? "—"} · <strong>Tel:</strong> ${cust?.phone ?? "—"}</p>
       <p style="margin:0 0 4px;font-size:13px"><strong>Envío (${o.shipping_method ?? "—"}):</strong> ${addr}</p>
@@ -177,10 +178,17 @@ export async function notifyCashCut(r: CashCutReport) {
 
   const diffColor = r.difference === 0 ? "#16a34a" : r.difference > 0 ? "#2563eb" : "#dc2626";
   const head = (t: string) => `<p style="margin:16px 0 8px;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#a08c6b">${t}</p>`;
+  // Venta del día completo: si hubo dos turnos, el total del lote no dice cómo
+  // cerró el día. Va resaltado porque NO cuadra con el resto del corte a propósito.
+  const dayRow = `<tr>
+      <td style="padding:6px 0 2px;font-size:13px"><strong>Venta total del día (todas las cajas)</strong></td>
+      <td style="padding:6px 0 2px;font-size:13px;text-align:right"><strong>${money(r.day.totalCents)}</strong>
+        <span style="color:#8a8a8a">· ${r.day.orders} venta${r.day.orders === 1 ? "" : "s"}</span></td>
+    </tr>`;
   const inner = `
     <p style="margin:0 0 4px;font-size:13px"><strong>Caja:</strong> ${r.registerName} · <strong>Cajero:</strong> ${r.cashier}</p>
     <p style="margin:0 0 4px;font-size:13px"><strong>Lote:</strong> ${r.lote} · <strong>Personas atendidas:</strong> ${r.peopleServed}</p>
-    <p style="margin:0 0 16px;font-size:13px"><strong>Apertura:</strong> ${new Date(r.openedAt).toLocaleString("es-MX")} · <strong>Cierre:</strong> ${r.closedAt ? new Date(r.closedAt).toLocaleString("es-MX") : "—"}</p>
+    <p style="margin:0 0 16px;font-size:13px"><strong>Apertura:</strong> ${formatStore(r.openedAt)} · <strong>Cierre:</strong> ${r.closedAt ? formatStore(r.closedAt) : "—"}</p>
 
     ${head(`Ventas del lote (${r.sales.length})`)}
     ${salesHtml}
@@ -190,7 +198,8 @@ export async function notifyCashCut(r: CashCutReport) {
 
     ${head("Resumen del turno")}
     <table style="width:100%;border-collapse:collapse;font-size:13px">
-      ${row("Ventas", String(r.sales.length))}
+      ${row("Ventas del turno", String(r.sales.length))}
+      ${dayRow}
       ${summaryPairs(r.totals).map((p) => row(p.label, (p.negative ? "−" : "") + money(p.cents))).join("")}
       <tr><td colspan="2" style="padding:8px 0 2px;font-weight:bold">Esperado</td></tr>
       ${expectedPairs(r.totals).map((p) => row(p.label, money(p.cents))).join("")}

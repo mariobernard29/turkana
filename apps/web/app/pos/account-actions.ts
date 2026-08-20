@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { businessDayKey } from "@/lib/dates";
 import { buildLineItems } from "@/lib/sale-items";
 import { money, type ReceiptData } from "@/lib/escpos";
 import { methodLabel } from "@/lib/payments";
@@ -374,7 +375,7 @@ export type AccountsData = {
 export async function getAccountsData(q?: string): Promise<AccountsData> {
   await requireStaff();
   const db = createAdminClient();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = businessDayKey();
   const term = (q ?? "").trim();
   // Un folio (AP-000123 o "123") no debe filtrar la lista de créditos, que no tiene.
   const looksLikeFolio = /^(ap-?)?\d+$/i.test(term);

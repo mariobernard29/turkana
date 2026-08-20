@@ -46,6 +46,7 @@ const BIZ_KEYS = {
   cashDrop: "cash_drop_threshold_cents",
   adminEmail: "admin_alert_email",
   lowStock: "low_stock_threshold",
+  sessionMaxHours: "session_max_hours",
 } as const;
 
 const DESCRIPTIONS: Record<string, string> = {
@@ -55,6 +56,7 @@ const DESCRIPTIONS: Record<string, string> = {
   [BIZ_KEYS.cashDrop]: "Límite de efectivo en caja (centavos)",
   [BIZ_KEYS.adminEmail]: "Correos de administración para alertas (separados por coma)",
   [BIZ_KEYS.lowStock]: "Umbral de inventario bajo (piezas)",
+  [BIZ_KEYS.sessionMaxHours]: "Aviso de turno demasiado largo (horas)",
 };
 
 export type BusinessSettings = {
@@ -63,6 +65,9 @@ export type BusinessSettings = {
   // por coma (ver parseAlertEmails en lib/admin-alerts).
   adminEmail: string; adminEmail2: string;
   lowStockThreshold: number;
+  // A partir de cuántas horas abierto se le avisa al POS y al panel que hay que
+  // hacer el corte. Un turno se quedó abierto 31 horas por no tener este aviso.
+  sessionMaxHours: number;
 };
 
 export async function getBusinessSettings(): Promise<BusinessSettings> {
@@ -80,6 +85,7 @@ export async function getBusinessSettings(): Promise<BusinessSettings> {
     adminEmail: emails[0] ?? "",
     adminEmail2: emails[1] ?? "",
     lowStockThreshold: num(BIZ_KEYS.lowStock, 5),
+    sessionMaxHours: num(BIZ_KEYS.sessionMaxHours, 12),
   };
 }
 
@@ -108,12 +114,15 @@ export async function updateBusinessSettings(input: BusinessSettings): Promise<{
       return { key: k, value: String(Math.round(v)), description: DESCRIPTIONS[k] };
     }),
     { key: BIZ_KEYS.lowStock, value: String(Math.max(1, Math.round(input.lowStockThreshold || 5))), description: DESCRIPTIONS[BIZ_KEYS.lowStock] },
+    { key: BIZ_KEYS.sessionMaxHours, value: String(Math.max(1, Math.round(input.sessionMaxHours || 12))), description: DESCRIPTIONS[BIZ_KEYS.sessionMaxHours] },
     { key: BIZ_KEYS.adminEmail, value: alertEmails.join(", "), description: DESCRIPTIONS[BIZ_KEYS.adminEmail] },
   ];
   const { error } = await db.from("app_settings").upsert(rows, { onConflict: "key" });
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/admin/ajustes");
+  revalidatePath("/admin");
+  revalidatePath("/pos");
   revalidatePath("/checkout");
   return { ok: true };
 }

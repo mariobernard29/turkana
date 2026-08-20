@@ -8,8 +8,12 @@ import { getDeviceId } from "@/lib/offline/device";
 import { getPendingOps, markOp, statusCounts } from "@/lib/offline/db";
 import { processSyncBatch } from "@/app/pos/actions";
 import { getPrinterStatus, type PrinterStatus } from "@/app/pos/print-actions";
+import { useLiveRefresh } from "@/lib/use-live-refresh";
 
 export function PosBootstrap() {
+  // Precios, altas/bajas de producto y existencias, en cuanto cambian en el panel.
+  useLiveRefresh(["products", "product_variants", "stock_levels"]);
+
   const online = useOnline();
   const router = useRouter();
   const [counts, setCounts] = useState({ pending: 0, conflict: 0 });
@@ -116,17 +120,26 @@ export function PosBootstrap() {
 function PrinterPill({ printer }: { printer: PrinterStatus }) {
   const name = printer.name ?? "Impresora";
 
+  // El estado de la impresora NUNCA impide cobrar ni cerrar el turno. Los textos
+  // lo dicen explícitamente: una cajera dejó un turno abierto 31 horas por
+  // entender que esta pastilla en ámbar era un candado.
   if (!printer.online) {
     return (
-      <Pill className="bg-amber-500 text-white" title={`${name} no responde · los tickets saldrán por el diálogo del navegador`}>
-        <Printer className="h-3 w-3" /> Sin impresora
+      <Pill
+        className="bg-amber-500 text-white"
+        title={`${name} no responde. Los tickets saldrán por el diálogo del navegador. Puedes cobrar y cerrar el turno con normalidad.`}
+      >
+        <Printer className="h-3 w-3" /> Ticket por navegador
       </Pill>
     );
   }
   if (printer.failed > 0) {
     return (
-      <Pill className="bg-red-600 text-white" title={`${printer.failed} ticket(s) no se pudieron imprimir · revisa papel y encendido`}>
-        <Printer className="h-3 w-3" /> {printer.failed}
+      <Pill
+        className="bg-red-600 text-white"
+        title={`${printer.failed} ticket(s) no salieron · revisa papel y encendido. No impide cobrar ni cerrar el turno.`}
+      >
+        <Printer className="h-3 w-3" /> {printer.failed} sin salir
       </Pill>
     );
   }

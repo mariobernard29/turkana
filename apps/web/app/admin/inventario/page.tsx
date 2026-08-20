@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { LiveRefresh } from "@/components/live-refresh";
 import { MAIN_LOCATION_KEY } from "@/lib/inventory";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { InventoryManager, type InvRow } from "@/components/admin/inventory-manager";
@@ -56,6 +57,7 @@ export default async function InventoryPage() {
 
   return (
     <div>
+      <LiveRefresh tables={["stock_levels", "product_variants", "products"]} />
       <h1 className="mb-1 text-3xl text-ink">Inventario</h1>
       <p className="mb-8 text-sm text-muted">
         {rows.length} variantes · {totalUnits} piezas en total · un solo almacén para el

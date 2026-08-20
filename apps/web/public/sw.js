@@ -1,6 +1,12 @@
 // Service Worker del POS Turkana — app shell offline (network-first para
 // navegación, stale-while-revalidate para assets del mismo origen).
-const CACHE = "turkana-pos-v2";
+const CACHE = "turkana-pos-v3";
+
+// Sólo el POS necesita funcionar sin red. El panel se cacheaba también —el
+// scope del worker es "/"— y cuando el WiFi de la tienda fallaba servía HTML
+// congelado: el dashboard llegó a mostrar la misma cifra de ventas tres días
+// seguidos. El panel siempre va a la red.
+const isOffline = (url) => url.pathname === "/pos" || url.pathname.startsWith("/pos/");
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -20,8 +26,9 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // Navegación: red primero; si falla, sirve la página cacheada (o /pos).
+  // Navegación: sólo el POS se guarda para poder abrirlo sin red.
   if (req.mode === "navigate") {
+    if (!isOffline(url)) return; // el panel y la tienda, directo a la red
     event.respondWith(
       (async () => {
         try {

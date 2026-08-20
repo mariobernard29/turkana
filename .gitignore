@@ -40,3 +40,6 @@ pnpm-debug.log*
 .turbo/
 .vercel/
 *.tsbuildinfo
+
+# Config local del MCP (puede llevar credenciales en la URL)
+.mcp.json

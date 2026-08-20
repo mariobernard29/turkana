@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { X, Loader2, Printer } from "lucide-react";
 import { getSessionTotals, closeSession } from "@/app/pos/actions";
 import { getOpenSessionInfo } from "@/app/pos/corte-actions";
+import { getPrinterStatus, type PrinterStatus } from "@/app/pos/print-actions";
 import type { OpenSession } from "@/lib/cash-report";
 import { printReceipt } from "@/lib/print-direct";
 import type { ReceiptData } from "@/lib/escpos";
@@ -31,12 +32,24 @@ export function PosClose({
   const [done, setDone] = useState<{ expectedCash: number; countedCash: number; difference: number } | null>(null);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [info, setInfo] = useState<OpenSession | null>(null);
+  const [printer, setPrinter] = useState<PrinterStatus | null>(null);
 
   useEffect(() => {
     getSessionTotals(sessionId).then(setTotals);
     // El turno es de la tienda: quien cierra puede no ser quien lo abrió.
     getOpenSessionInfo(sessionId).then(setInfo);
+    // Sólo para explicar por dónde va a salir el papel; nunca para bloquear.
+    getPrinterStatus().then(setPrinter).catch(() => {});
   }, [sessionId]);
+
+  // El cierre no depende de la impresora, pero si está caída conviene decirlo
+  // ANTES de que la cajera se quede mirando la pastilla ámbar sin cerrar.
+  const printWarning =
+    printer?.configured && (!printer.online || printer.failed > 0)
+      ? printer.online
+        ? `${printer.failed} ticket(s) no salieron de la impresora.`
+        : "La impresora no está respondiendo."
+      : null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,6 +86,13 @@ export function PosClose({
           <p className="mb-4 rounded-lg bg-cream px-4 py-2.5 text-xs text-muted">
             Turno de <span className="text-ink">{info.cashier}</span> · {info.registerName} · abierto{" "}
             {new Date(info.openedAt).toLocaleString("es-MX")}. Incluye todo lo cobrado en la tienda durante el turno.
+          </p>
+        )}
+
+        {!done && printWarning && (
+          <p className="mb-4 rounded-lg bg-amber-50 px-4 py-2.5 text-xs text-amber-900">
+            {printWarning} <span className="font-medium">Puedes cerrar el turno igual</span>; el ticket del corte
+            saldrá por el diálogo del navegador.
           </p>
         )}
 

@@ -41,7 +41,7 @@ async function loadPos(registerId: string) {
     .eq("register_id", registerId)
     .eq("status", "open")
     .maybeSingle();
-  const session = sessionData as unknown as { id: string; opening_float_cents: number } | null;
+  const session = sessionData as unknown as { id: string; opening_float_cents: number; opened_at: string } | null;
 
   if (!session) {
     return { session: null, products: [] as PosProduct[], categories: [] as { id: string; name: string }[] };
@@ -129,5 +129,19 @@ export default async function PosPage() {
   if (!session) {
     return <PosOpen register={register} />;
   }
-  return <PosSale session={{ id: session.id }} products={products} categories={categories} />;
+  // Aviso de turno largo: un turno se quedó abierto 31 horas y su dinero acabó
+  // arrastrado a otro día. El umbral se configura en Ajustes → Negocio.
+  const { data: maxRow } = await db
+    .from("app_settings").select("value").eq("key", "session_max_hours").maybeSingle();
+  const maxHours = parseInt((maxRow as { value?: string } | null)?.value ?? "", 10) || 12;
+  const openHours = Math.floor((Date.now() - new Date(session.opened_at).getTime()) / 3_600_000);
+
+  return (
+    <PosSale
+      session={{ id: session.id }}
+      products={products}
+      categories={categories}
+      shiftHours={openHours >= maxHours ? openHours : null}
+    />
+  );
 }

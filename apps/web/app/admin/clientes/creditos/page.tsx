@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { businessDayKey } from "@/lib/dates";
 import { CreditsManager, type CreditRow } from "@/components/admin/credits-manager";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +11,7 @@ const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? nul
 async function load(): Promise<CreditRow[]> {
   try {
     const db = createAdminClient();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = businessDayKey();
     const { data } = await db
       .from("credit_accounts")
       .select("id, limit_cents, balance_cents, status, customers(full_name), credit_transactions(type, due_date)")

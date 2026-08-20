@@ -913,6 +913,25 @@ alter publication supabase_realtime add table stock_levels;
 alter publication supabase_realtime add table notifications;
 alter publication supabase_realtime add table cash_sessions;
 
+-- 0030 · catálogo en tiempo real (el POS ya no espera a que alguien recargue).
+do $$
+begin
+  alter publication supabase_realtime add table products;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table product_variants;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table categories;
+exception when duplicate_object then null;
+end $$;
+
 
 -- ====================================================================
 -- migrations/0013_rewards_expiry.sql
@@ -1171,7 +1190,7 @@ alter table cash_sessions add column if not exists people_served int;
 -- reference_type dice a qué apunta reference_id (antes era imposible saberlo).
 alter table cash_movements add column if not exists reference_type text;
 
-do $
+do $$
 declare c text;
 begin
   select conname into c
@@ -1180,7 +1199,7 @@ begin
      and pg_get_constraintdef(oid) ilike '%method%'
    limit 1;
   if c is not null then execute format('alter table cash_movements drop constraint %I', c); end if;
-end $;
+end $$;
 
 alter table cash_movements add constraint cash_movements_method_check
   check (method is null or method in
@@ -1421,13 +1440,13 @@ create trigger trg_layaways_folio before insert on layaways
   for each row execute function set_layaway_folio();
 
 -- Backfill de apartados existentes (por antigüedad, para que el folio siga el orden real).
-do $
+do $$
 declare r record;
 begin
   for r in select id from layaways where folio is null order by created_at loop
     update layaways set folio = next_layaway_folio() where id = r.id;
   end loop;
-end $;
+end $$;
 
 create unique index if not exists layaways_folio_key on layaways (folio);
 
@@ -1460,7 +1479,7 @@ delete from cash_sessions s
 
 -- 2) Si quedó más de un turno CON movimientos, no se puede continuar: hay que
 --    cerrar los sobrantes desde el POS para no perder su corte.
-do $
+do $$
 declare abiertos int;
 begin
   select count(*) into abiertos from cash_sessions where status = 'open';
@@ -1468,7 +1487,7 @@ begin
     raise exception
       'Hay % turnos abiertos con movimientos. Ciérralos desde el POS (queda sólo uno) y vuelve a correr este script.', abiertos;
   end if;
-end $;
+end $$;
 
 -- 3) La regla, a nivel de base: a lo más una fila con status = 'open'.
 --    El índice parcial sobre status hace imposible una segunda fila abierta.

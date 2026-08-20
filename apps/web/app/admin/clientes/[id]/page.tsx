@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { businessDayKey } from "@/lib/dates";
 import { formatMXN } from "@/lib/utils";
 import { LayawaysManager, type LayawayRow } from "@/components/admin/layaways-manager";
 import { CreditsManager, type CreditRow } from "@/components/admin/credits-manager";
@@ -13,7 +14,7 @@ const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? nul
 
 async function loadCustomer(id: string) {
   const db = createAdminClient();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = businessDayKey();
   const [cust, orders, credits, layaways] = await Promise.all([
     db.from("customers").select("full_name, email, phone, customer_addresses(street, ext_number, city, state, postal_code)").eq("id", id).maybeSingle(),
     db.from("orders").select("id, order_number, status, total_cents, channel, created_at").eq("customer_id", id).is("deleted_at", null).order("created_at", { ascending: false }).limit(50),

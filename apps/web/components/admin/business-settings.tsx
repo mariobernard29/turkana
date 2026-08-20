@@ -16,6 +16,7 @@ export function BusinessSettingsForm({ initial }: { initial: BusinessSettings })
   const [adminEmail, setAdminEmail] = useState(initial.adminEmail);
   const [adminEmail2, setAdminEmail2] = useState(initial.adminEmail2);
   const [lowStock, setLowStock] = useState(String(initial.lowStockThreshold));
+  const [maxHours, setMaxHours] = useState(String(initial.sessionMaxHours));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ k: "ok" | "err"; t: string } | null>(null);
 
@@ -26,6 +27,7 @@ export function BusinessSettingsForm({ initial }: { initial: BusinessSettings })
       expressCents: toCents(express), cashDropCents: toCents(cashDrop),
       adminEmail: adminEmail.trim(), adminEmail2: adminEmail2.trim(),
       lowStockThreshold: parseInt(lowStock, 10) || 5,
+      sessionMaxHours: parseInt(maxHours, 10) || 12,
     });
     setBusy(false);
     setMsg(res.ok ? { k: "ok", t: "Parámetros guardados" } : { k: "err", t: res.error ?? "Error" });
@@ -74,6 +76,12 @@ export function BusinessSettingsForm({ initial }: { initial: BusinessSettings })
             <input type="number" min="1" step="1" value={lowStock} onChange={(e) => setLowStock(e.target.value)}
               className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm outline-none focus:border-gold" />
             <p className="mt-1 text-xs text-muted">Avisa cuando un producto llegue a esta cantidad o menos (tienda física o en línea).</p>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs uppercase tracking-wider text-muted">Aviso de turno largo (horas)</label>
+            <input type="number" min="1" step="1" value={maxHours} onChange={(e) => setMaxHours(e.target.value)}
+              className="w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm outline-none focus:border-gold" />
+            <p className="mt-1 text-xs text-muted">Pasadas estas horas, el POS y el panel avisan que falta hacer el corte. Es un aviso en pantalla, no un correo.</p>
           </div>
         </div>
       </div>

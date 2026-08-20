@@ -3,6 +3,7 @@
 // Módulo de servidor normal (NO "use server"): recibe el cliente de BD.
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeCashTotals, type CashMovementRow, type CashTotals } from "@/lib/cash";
+import { businessRange } from "@/lib/dates";
 
 type DB = ReturnType<typeof createAdminClient>;
 
@@ -119,6 +120,8 @@ export type CashCutReport = {
   difference: number;
   sales: SessionSale[];
   movements: SessionMovement[];
+  /** Venta de TODO el día del negocio: las dos cajas más la tienda en línea. */
+  day: { totalCents: number; orders: number };
 };
 
 type SessionRow = {
@@ -147,6 +150,22 @@ type OrderRow = {
   payments: { method: string; amount_cents: number }[] | null;
 };
 
+// Todo lo vendido en el día de negocio que contiene ese instante: las dos cajas
+// y la tienda en línea. Ojo: es del DÍA, no del turno, así que no cuadra con el
+// resto del corte a propósito.
+async function loadBusinessDayTotal(db: DB, at: string): Promise<{ totalCents: number; orders: number }> {
+  const { from, to } = businessRange("day", new Date(at));
+  const { data } = await db
+    .from("orders")
+    .select("total_cents")
+    .in("status", ["paid", "completed", "delivered"])
+    .is("deleted_at", null)
+    .gte("created_at", from.toISOString())
+    .lt("created_at", to.toISOString());
+  const rows = (data as unknown as { total_cents: number }[]) ?? [];
+  return { totalCents: rows.reduce((s, o) => s + (o.total_cents ?? 0), 0), orders: rows.length };
+}
+
 export async function loadCashCutReport(db: DB, sessionId: string): Promise<CashCutReport | null> {
   const { data: sessData } = await db
     .from("cash_sessions")
@@ -171,6 +190,12 @@ export async function loadCashCutReport(db: DB, sessionId: string): Promise<Cash
   const movs = (movsData as unknown as (CashMovementRow & { notes: string | null; created_at: string })[]) ?? [];
   const orders = (ordsData as unknown as (OrderRow & { discount_cents: number })[]) ?? [];
   const discounts = orders.reduce((s, o) => s + (o.discount_cents ?? 0), 0);
+
+  // Venta del día completo (00:00–23:59 hora de Los Mochis), de todas las cajas
+  // y también en línea: con varios turnos, el total del lote no dice cómo cerró
+  // el día. Se ancla al cierre del turno, no a "ahora", para que un corte que se
+  // reimprime mañana siga informando del día que le toca.
+  const day = await loadBusinessDayTotal(db, sess.closed_at ?? sess.opened_at);
 
   const staffId = sess.closed_by ?? sess.cashier_id;
   let cashier = "—";
@@ -214,6 +239,7 @@ export async function loadCashCutReport(db: DB, sessionId: string): Promise<Cash
     },
     difference: sess.difference_cents ?? 0,
     sales,
+    day,
     movements: movs.map((m) => ({
       type: m.type,
       method: m.method,

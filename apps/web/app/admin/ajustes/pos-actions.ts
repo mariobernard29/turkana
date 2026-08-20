@@ -228,27 +228,63 @@ export async function retryJob(id: string): Promise<{ ok: boolean; error?: strin
   return { ok: true };
 }
 
+// Saca un ticket de la cola y lo tira. Hace falta cuando un trabajo se queda
+// atorado: sin esto la única salida era entrar a la base de datos, y mientras
+// tanto el contador de la cola no bajaba nunca.
+export async function deleteJob(id: string): Promise<{ ok: boolean; error?: string }> {
+  const ctx = await requireAdmin();
+  if ("error" in ctx) return { ok: false, error: ctx.error };
+
+  const { error } = await ctx.db.from("print_jobs").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin/ajustes/impresoras");
+  return { ok: true };
+}
+
+// Vacía de un golpe lo que no ha salido (pendiente, imprimiendo o en error).
+// Los ya impresos se conservan como historial.
+export async function clearQueue(): Promise<{ ok: boolean; error?: string; removed?: number }> {
+  const ctx = await requireAdmin();
+  if ("error" in ctx) return { ok: false, error: ctx.error };
+
+  const { data, error } = await ctx.db
+    .from("print_jobs").delete()
+    .in("status", ["pending", "printing", "error"])
+    .select("id");
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin/ajustes/impresoras");
+  return { ok: true, removed: (data ?? []).length };
+}
+
 // Página de prueba desde el panel: comprueba la cadena completa —cola, agente,
 // impresora— sin tener que cobrar una venta de mentiras.
 export async function testPrint(printerId: string): Promise<{ ok: boolean; error?: string }> {
   const ctx = await requireAdmin();
   if ("error" in ctx) return { ok: false, error: ctx.error };
 
+  // docType 'prueba': antes se mandaba como 'sale' y salía una nota de venta
+  // completa, con datos fiscales y un total, que parecía una venta de verdad.
   const receipt: ReceiptData = {
-    docType: "sale",
+    docType: "prueba",
     orderNumber: "PRUEBA",
-    items: [{ name: "Pagina de prueba", quantity: 1, total_cents: 0 }],
+    items: [],
     subtotal: 0, tax: 0, total: 0,
     attendedBy: ctx.staff.fullName,
     meta: [{ label: "Enviada", value: new Date().toLocaleString("es-MX") }],
+    notes: [
+      "Si lees esto, la cola y el agente estan",
+      "funcionando y la impresora responde.",
+    ],
   };
 
-  // Sin logo: aquí no hay canvas, y para una prueba el texto basta.
+  // El logo ya no necesita canvas: viene precalculado en lib/logo-raster.ts.
   const payload = Buffer.from(buildReceipt(receipt)).toString("base64");
 
   const { error } = await ctx.db.from("print_jobs").insert({
     printer_id: printerId,
-    doc_type: "sale",
+    doc_type: "prueba",
     label: "Pagina de prueba",
     payload,
     created_by: ctx.staff.id,

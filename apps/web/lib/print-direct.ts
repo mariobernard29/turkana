@@ -9,8 +9,8 @@
 // Si algo de esa cadena no está —sin red, sin impresora dada de alta, o el
 // agente caído— se cae al camino viejo: el HTML con el diálogo del navegador.
 // Una tienda no se puede quedar sin poder entregar un ticket.
-import { buildReceipt, DOC_TITLES, docType, type ReceiptData, type RasterLogo } from "@/lib/escpos";
-import { loadLogoRaster, printReceiptHTML } from "@/lib/print";
+import { buildReceipt, DOC_TITLES, docType, type ReceiptData } from "@/lib/escpos";
+import { printReceiptHTML } from "@/lib/print";
 import { enqueuePrint } from "@/app/pos/print-actions";
 
 export type PrintOutcome = {
@@ -19,14 +19,6 @@ export type PrintOutcome = {
   fallback: boolean;
   error?: string;
 };
-
-// El logo se convierte a mapa de bits una sola vez por pestaña: es lo más caro
-// de armar el ticket y no cambia.
-let logoOnce: Promise<RasterLogo | undefined> | null = null;
-function logo() {
-  if (!logoOnce) logoOnce = loadLogoRaster();
-  return logoOnce;
-}
 
 // A base64 por trozos: con el bitmap del logo son varios miles de bytes y
 // String.fromCharCode(...bytes) desborda la pila.
@@ -60,7 +52,7 @@ export async function printReceipt(
   }
 
   try {
-    const bytes = buildReceipt(data, await logo());
+    const bytes = buildReceipt(data);
     const res = await enqueuePrint({
       docType: docType(data),
       label: label(data),

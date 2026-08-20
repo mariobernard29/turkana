@@ -14,6 +14,10 @@ type DB = ReturnType<typeof createAdminClient>;
 
 // Cuánto puede callarse el agente antes de darlo por caído. Late cada 30 s.
 const HEARTBEAT_MS = 90_000;
+// Un trabajo que lleva más de esto en 'printing' es un fantasma: el agente lo
+// tomó y se murió antes de terminar. Nadie lo reclamaba y se quedaba ahí para
+// siempre, inflando el contador de la cola y asustando a la cajera.
+const STUCK_MS = 120_000;
 
 export type PrinterStatus = {
   configured: boolean;
@@ -22,6 +26,8 @@ export type PrinterStatus = {
   lastSeenAt: string | null;
   pending: number;
   failed: number;
+  /** Hay trabajos en cola pero no hay quien los imprima: la cola está atorada. */
+  stale: boolean;
 };
 
 type PrinterRow = { id: string; name: string; last_seen_at: string | null };
@@ -63,8 +69,10 @@ export async function getPrinterStatus(): Promise<PrinterStatus> {
   const printer = await resolvePrinter(db, await currentRegisterId());
 
   if (!printer) {
-    return { configured: false, online: false, name: null, lastSeenAt: null, pending: 0, failed: 0 };
+    return { configured: false, online: false, name: null, lastSeenAt: null, pending: 0, failed: 0, stale: false };
   }
+
+  await recoverStuckJobs(db, printer.id);
 
   const { count: pending } = await db
     .from("print_jobs").select("id", { count: "exact", head: true })
@@ -76,14 +84,36 @@ export async function getPrinterStatus(): Promise<PrinterStatus> {
     .from("print_jobs").select("id", { count: "exact", head: true })
     .eq("printer_id", printer.id).eq("status", "error").gte("created_at", since);
 
+  const online = isOnline(printer.last_seen_at);
   return {
     configured: true,
-    online: isOnline(printer.last_seen_at),
+    online,
     name: printer.name,
     lastSeenAt: printer.last_seen_at,
     pending: pending ?? 0,
     failed: failed ?? 0,
+    stale: !online && (pending ?? 0) > 0,
   };
+}
+
+// Devuelve a la cola los trabajos que el agente tomó y nunca terminó (se apagó
+// la PC a media impresión). Corre desde el POS cada 60 s, así que la cola se
+// auto-repara sin que nadie tenga que entrar al panel.
+async function recoverStuckJobs(db: DB, printerId: string): Promise<void> {
+  const since = new Date(Date.now() - STUCK_MS).toISOString();
+  const revive = { status: "pending", error: "Se reintentó: el agente no terminó de imprimirlo" };
+  const stuck = () => db.from("print_jobs").update(revive).eq("printer_id", printerId).eq("status", "printing");
+
+  // Dos consultas en vez de un `.or(...)`: la sintaxis de PostgREST con una
+  // fecha ISO dentro es fácil de romper sin que nadie se entere, y si esto falla
+  // en silencio el ticket fantasma se queda atorado otra vez. El caso normal es
+  // el primero; el segundo es una red por si `claimed_at` quedó vacío.
+  const [viejos, sinFecha] = await Promise.all([
+    stuck().lt("claimed_at", since),
+    stuck().is("claimed_at", null),
+  ]);
+  const error = viejos.error ?? sinFecha.error;
+  if (error) console.error("[print] no se pudo recuperar la cola atorada:", error.message);
 }
 
 export type EnqueueResult =

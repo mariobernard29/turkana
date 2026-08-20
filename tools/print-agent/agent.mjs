@@ -42,6 +42,8 @@ const POLL_MS = 5000;          // red de seguridad por si se cae el websocket
 const CLEANUP_MS = 60 * 60 * 1000;
 const KEEP_DONE_DAYS = 7;
 const MAX_ATTEMPTS = 3;
+// Un trabajo que lleva más de esto en 'printing' es un fantasma: se devuelve a la cola.
+const STUCK_MS = 120_000;
 
 const log = (...a) => console.log(new Date().toLocaleTimeString("es-MX"), ...a);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -101,20 +103,31 @@ function probePrinter() {
 // ── Página de prueba ────────────────────────────────────────────────────────
 function testPage() {
   const ESC = 0x1b, GS = 0x1d;
+  const W = 42;                   // las mismas 42 columnas que el resto de tickets
   const b = [];
   const text = (s) => b.push(...Buffer.from(s, "ascii"));
+  const line = (s = "") => text(s + "\n");
+  const spaced = (s) => s.split("").join(" ");
   b.push(ESC, 0x40);              // init
+  b.push(ESC, 0x45, 0x01);        // negrita, como en los tickets de verdad
   b.push(ESC, 0x61, 0x01);        // centrado
   b.push(GS, 0x21, 0x11);         // doble alto y ancho
-  text("TURKANA\n");
+  line("TURKANA");
   b.push(GS, 0x21, 0x00);
-  text("Prueba de impresion\n");
-  text(new Date().toLocaleString("es-MX") + "\n");
-  text(cfg.host + ":" + cfg.port + "\n");
-  text("--------------------------------\n");
-  text("Si lees esto, el agente puede\n");
-  text("imprimir sin pasar por el\n");
-  text("navegador.\n");
+  line(spaced("JOYERIA FINA"));
+  line("=".repeat(W));
+  b.push(GS, 0x21, 0x01);         // doble alto para el titulo
+  line("PAGINA DE PRUEBA");
+  b.push(GS, 0x21, 0x00);
+  line();
+  line(new Date().toLocaleString("es-MX"));
+  line(cfg.host + ":" + cfg.port);
+  line("=".repeat(W));
+  line("Si lees esto, el agente puede");
+  line("imprimir sin pasar por el");
+  line("navegador.");
+  line();
+  b.push(ESC, 0x45, 0x00);
   b.push(ESC, 0x64, 0x03);        // avanza 3 lineas
   b.push(GS, 0x56, 0x42, 0x00);   // corte parcial
   return Buffer.from(b);
@@ -208,6 +221,19 @@ async function heartbeat(sb) {
 async function cleanup(sb) {
   const limite = new Date(Date.now() - KEEP_DONE_DAYS * 24 * 60 * 60 * 1000).toISOString();
   await sb.from("print_jobs").delete().eq("status", "done").lt("created_at", limite);
+  // Los errores tampoco se guardan para siempre: se acumulaban sin límite.
+  await sb.from("print_jobs").delete().eq("status", "error").lt("created_at", limite);
+
+  // Trabajos que este agente tomó y no terminó (se apagó la PC a media
+  // impresión). Sin esto se quedaban en 'printing' de por vida y el contador de
+  // la cola no bajaba nunca.
+  const atorados = new Date(Date.now() - STUCK_MS).toISOString();
+  await sb
+    .from("print_jobs")
+    .update({ status: "pending", error: "Se reintentó: el agente no terminó de imprimirlo" })
+    .eq("printer_id", cfg.printerId)
+    .eq("status", "printing")
+    .lt("claimed_at", atorados);
 }
 
 // ── Arranque ────────────────────────────────────────────────────────────────

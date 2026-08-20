@@ -1,6 +1,7 @@
 // Ticket del corte de caja: mismo contenido que el correo de corte, en 80mm.
 // Puro: recibe el reporte ya cargado (lib/cash-report.ts) y arma el ReceiptData.
 import { money, type ReceiptData, type ReceiptRow, type ReceiptSection } from "@/lib/escpos";
+import { formatStore } from "@/lib/dates";
 import { CASH_NEGATIVE_TYPES, countedPairs, expectedPairs, movementLabel, summaryPairs } from "@/lib/cash";
 import type { CashCutReport } from "@/lib/cash-report";
 
@@ -10,7 +11,8 @@ const KIND_SUFFIX: Record<string, string> = {
   sale: "",
 };
 
-const dt = (iso: string | null) => (iso ? new Date(iso).toLocaleString("es-MX") : "—");
+// Hora de la tienda: estos tickets también se arman en el servidor, que va en UTC.
+const dt = (iso: string | null) => (iso ? formatStore(iso) : "—");
 
 export function buildCashCutReceipt(r: CashCutReport): ReceiptData {
   const sections: ReceiptSection[] = [];

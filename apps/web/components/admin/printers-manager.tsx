@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Printer, RotateCcw } from "lucide-react";
+import { Loader2, Printer, RotateCcw, Trash2 } from "lucide-react";
 import {
-  savePrinter, retryJob, testPrint,
+  savePrinter, retryJob, deleteJob, clearQueue, testPrint,
   type PrinterRow, type JobRow,
 } from "@/app/admin/ajustes/pos-actions";
 
@@ -60,11 +60,27 @@ export function PrintersManager({
 
       {/* La cola: es donde se ve si un ticket se atoró y por qué. */}
       <section className="overflow-hidden rounded-2xl border border-ink/10 bg-white shadow-sm">
-        <div className="border-b border-ink/10 px-6 py-4">
-          <h2 className="text-lg text-ink">Últimos tickets</h2>
-          <p className="mt-1 text-xs text-muted">
-            Los impresos se borran solos a los 7 días. Un error casi siempre es papel o impresora apagada.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink/10 px-6 py-4">
+          <div>
+            <h2 className="text-lg text-ink">Últimos tickets</h2>
+            <p className="mt-1 text-xs text-muted">
+              Los impresos se borran solos a los 7 días. Un error casi siempre es papel o impresora apagada.
+              Un ticket en la cola nunca impide cobrar ni cerrar el turno.
+            </p>
+          </div>
+          {jobs.some((j) => j.status !== "done") && (
+            <button
+              onClick={() => {
+                if (!confirm("¿Vaciar la cola? Se tiran los tickets que no han salido.")) return;
+                run("clear", clearQueue, "Cola vaciada");
+              }}
+              disabled={busy !== null}
+              className="inline-flex items-center gap-1.5 rounded-full border border-ink/15 px-3 py-1.5 text-xs text-ink transition-colors hover:border-gold disabled:opacity-50"
+            >
+              {busy === "clear" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Vaciar cola
+            </button>
+          )}
         </div>
         {jobs.length === 0 ? (
           <p className="px-6 py-5 text-sm text-muted">Todavía no se ha mandado ningún ticket a imprimir.</p>
@@ -84,7 +100,13 @@ export function PrintersManager({
                   <tr key={j.id} className="border-b border-ink/5 last:border-0">
                     <td className="px-6 py-2.5">
                       <span className="text-ink">{j.label ?? j.docType}</span>
-                      {j.error && <span className="ml-2 text-xs text-red-700">{j.error}</span>}
+                      {/* En rojo sólo si de verdad falló: un ticket recuperado
+                          de la cola trae nota informativa y ya va en camino. */}
+                      {j.error && (
+                        <span className={`ml-2 text-xs ${j.status === "error" ? "text-red-700" : "text-muted"}`}>
+                          {j.error}
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2.5">
                       <span className={`rounded-full px-2 py-0.5 text-[11px] ${STATUS_STYLE[j.status] ?? "bg-ink/5 text-muted"}`}>
@@ -94,17 +116,31 @@ export function PrintersManager({
                     <td className="px-3 py-2.5 text-xs text-muted tabular-nums">
                       {new Date(j.createdAt).toLocaleString("es-MX")}
                     </td>
-                    <td className="px-3 py-2.5 text-right">
-                      {j.status === "error" && (
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center justify-end gap-2">
+                        {j.status !== "done" && (
+                          <button
+                            onClick={() => run(j.id, () => retryJob(j.id), "Ticket mandado otra vez")}
+                            disabled={busy !== null}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-ink/15 px-3 py-1.5 text-xs text-ink transition-colors hover:border-gold disabled:opacity-50"
+                          >
+                            {busy === j.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                            Reintentar
+                          </button>
+                        )}
                         <button
-                          onClick={() => run(j.id, () => retryJob(j.id), "Ticket mandado otra vez")}
+                          onClick={() => {
+                            if (!confirm("¿Borrar este ticket de la cola?")) return;
+                            run(`del-${j.id}`, () => deleteJob(j.id), "Ticket borrado de la cola");
+                          }}
                           disabled={busy !== null}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-ink/15 px-3 py-1.5 text-xs text-ink transition-colors hover:border-gold disabled:opacity-50"
+                          title="Borrar de la cola"
+                          aria-label="Borrar de la cola"
+                          className="inline-flex items-center rounded-full border border-ink/15 p-1.5 text-muted transition-colors hover:border-red-300 hover:text-red-700 disabled:opacity-50"
                         >
-                          {busy === j.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                          Reintentar
+                          {busy === `del-${j.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                         </button>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}

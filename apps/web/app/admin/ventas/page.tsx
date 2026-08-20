@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveRefresh } from "@/components/live-refresh";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatMXN } from "@/lib/utils";
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from "@/lib/orders";
@@ -52,6 +53,7 @@ export default async function OrdersPage({
 
   return (
     <div>
+      <LiveRefresh tables={["orders"]} />
       <h1 className="mb-1 text-3xl text-ink">Ventas</h1>
       <p className="mb-6 text-sm text-muted">{orders.length} ventas</p>
 

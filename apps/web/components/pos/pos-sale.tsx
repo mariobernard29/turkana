@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Search, Minus, Plus, Trash2, Loader2, AlertTriangle, Calculator, Menu, X } from "lucide-react";
@@ -43,10 +43,13 @@ export function PosSale({
   session,
   products,
   categories,
+  shiftHours,
 }: {
   session: { id: string };
   products: PosProduct[];
   categories: { id: string; name: string }[];
+  /** Horas que lleva abierto el turno, sólo si ya pasó del umbral configurado. */
+  shiftHours: number | null;
 }) {
   const router = useRouter();
   const online = useOnline();
@@ -64,6 +67,7 @@ export function PosSale({
   const [error, setError] = useState<string | null>(null);
   const [ticket, setTicket] = useState<SaleResult["ticket"] | null>(null);
   const [showClose, setShowClose] = useState(false);
+  const [priceNotice, setPriceNotice] = useState(false);
   const [serviceLines, setServiceLines] = useState<{ id: string; concept: string; description: string; amountCents: number }[]>([]);
   const [showService, setShowService] = useState(false);
   const [showAccounts, setShowAccounts] = useState(false);
@@ -86,6 +90,24 @@ export function PosSale({
 
   useEffect(() => {
     if (products.length) { setLocalProducts(products); cacheProducts(products as CachedProduct[]); }
+  }, [products]);
+
+  // El catálogo ahora se refresca solo (Realtime). Si mientras tanto cambia el
+  // precio de una pieza YA agregada, el carrito no se toca: cambiarle el total
+  // al cliente a media venta es peor que cobrar el precio con el que se agregó.
+  // Sólo se avisa; lo que se agregue después ya usa el precio nuevo.
+  const linesRef = useRef<Line[]>([]);
+  linesRef.current = lines;
+  useEffect(() => {
+    const cart = linesRef.current;
+    if (!products.length || !cart.length) return;
+    const now = new Map<string, number>();
+    for (const p of products) for (const s of p.sizes) now.set(s.variantId, s.priceCents);
+    const changed = cart.some((l) => {
+      const price = now.get(l.variantId);
+      return price !== undefined && price !== l.priceCents;
+    });
+    if (changed) setPriceNotice(true);
   }, [products]);
   useEffect(() => {
     if (products.length) return;
@@ -225,6 +247,31 @@ export function PosSale({
           eso, la fila de categorías (que es más ancha que la pantalla) estira la
           columna del grid y se lleva por delante el ticket y el menú. */}
       <div className="flex min-h-0 min-w-0 flex-col p-4">
+        {priceNotice && (
+          <div className="mb-3 flex items-center gap-2 rounded-xl bg-blue-50 px-4 py-2.5 text-sm text-blue-900">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span className="flex-1">
+              Se actualizaron precios en el catálogo. Las piezas que ya están en el ticket conservan
+              su precio; las que agregues ahora usan el precio nuevo.
+            </span>
+            <button
+              onClick={() => setPriceNotice(false)}
+              className="shrink-0 rounded-full p-1 hover:bg-blue-100"
+              aria-label="Cerrar aviso"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+        {shiftHours !== null && (
+          <div className="mb-3 flex items-center gap-2 rounded-xl bg-amber-100 px-4 py-2.5 text-sm text-amber-900">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>
+              Este turno lleva <strong>{shiftHours} horas</strong> abierto. Haz el corte de caja
+              para que el dinero entre en un lote y no se arrastre al día siguiente.
+            </span>
+          </div>
+        )}
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <div className="relative min-w-[180px] flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
