@@ -21,7 +21,12 @@ const DEBOUNCE_MS = 800;
 // aplica RLS al renglón NUEVO, así que un producto que se desactiva (deja de
 // cumplir `status = 'active'`) no genera evento visible y sin esto se quedaría
 // en pantalla del POS hasta que alguien recargara.
-const FALLBACK_MS = 120_000;
+//
+// Va holgado a propósito: recargar /pos vuelve a traer las ~1,200 variantes del
+// catálogo y a reescribir la caché local, así que no es algo que convenga hacer
+// cada dos minutos en un iPad. Realtime ya cubre lo urgente —precio y
+// existencias— al instante; esto sólo recoge lo que RLS deja fuera.
+const FALLBACK_MS = 600_000;
 
 export function useLiveRefresh(tables: string[], opts?: { enabled?: boolean }) {
   const router = useRouter();
