@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Truck, Users, ShieldCheck, ImageIcon, Mail, ChevronRight, Calculator, Printer } from "lucide-react";
+import { Truck, Users, ShieldCheck, ImageIcon, Mail, ChevronRight, Calculator, Printer, LifeBuoy } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +15,8 @@ const CARDS: Card[] = [
   { href: "/admin/ajustes/usuarios", title: "Usuarios", desc: "Personal, altas y roles del sistema.", icon: Users, adminOnly: true },
   { href: "/admin/ajustes/permisos", title: "Permisos", desc: "Qué puede hacer cada rol.", icon: ShieldCheck, adminOnly: true },
   { href: "/admin/ajustes/correo", title: "Correo", desc: "Prueba el envío de correos (Resend).", icon: Mail, adminOnly: false },
+  // Visible para todo el personal: es a donde se va cuando algo falla.
+  { href: "/admin/ajustes/ayuda", title: "Ayuda", desc: "Estado del sistema, qué hacer si algo falla, manual y soporte.", icon: LifeBuoy, adminOnly: false },
 ];
 
 export default async function SettingsPage() {

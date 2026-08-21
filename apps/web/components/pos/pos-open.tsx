@@ -1,38 +1,66 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { openSession, forgetRegister } from "@/app/pos/actions";
 import { getDeviceId, deviceLabel, detectPlatform, setRegisterId } from "@/lib/offline/device";
+
+// Si tras abrir el turno la pantalla no cambia en este tiempo, se recarga
+// entera. El turno YA quedó abierto en la base: lo único que falta es que el
+// equipo se entere. Pasó de verdad —la caja se quedó girando con el fondo ya
+// registrado— y una cajera no tiene por qué saber que hay que recargar.
+const ESPERA_ANTES_DE_RECARGAR = 6000;
 
 export function PosOpen({ register }: { register: { id: string; name: string } }) {
   const router = useRouter();
   const [float, setFloat] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [atorado, setAtorado] = useState(false);
+
+  // Al aparecer la pantalla de venta este componente se desmonta y el temporizador
+  // se cancela solo; si no se desmonta, es que algo se quedó a medias.
+  const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (temporizador.current) clearTimeout(temporizador.current); }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setBusy(true);
     setRegisterId(register.id);
-    const res = await openSession({
-      registerId: register.id,
-      openingFloatPesos: Number(float) || 0,
-      deviceId: getDeviceId(),
-      deviceName: deviceLabel(),
-      platform: detectPlatform(),
-    });
-    setBusy(false);
-    if (!res.ok) { setError(res.error ?? "Error"); return; }
-    router.refresh();
+    try {
+      const res = await openSession({
+        registerId: register.id,
+        openingFloatPesos: Number(float) || 0,
+        deviceId: getDeviceId(),
+        deviceName: deviceLabel(),
+        platform: detectPlatform(),
+      });
+      if (!res.ok) {
+        setBusy(false);
+        setError(res.error ?? "No se pudo abrir la caja");
+        return;
+      }
+      router.refresh();
+      setAtorado(true);
+      temporizador.current = setTimeout(() => window.location.reload(), ESPERA_ANTES_DE_RECARGAR);
+    } catch {
+      // Sin conexión, o el equipo tiene una versión vieja de la página cargada.
+      setBusy(false);
+      setError("No se pudo contactar al sistema. Revisa la conexión y vuelve a intentar.");
+    }
   };
 
   const changeRegister = async () => {
     setBusy(true);
-    await forgetRegister();
-    router.refresh();
+    try {
+      await forgetRegister();
+      router.refresh();
+    } catch {
+      setBusy(false);
+      setError("No se pudo cambiar de caja. Revisa la conexión.");
+    }
   };
 
   const field = "w-full rounded-xl border border-ink/15 bg-white px-4 py-4 text-lg outline-none focus:border-gold";
@@ -66,7 +94,24 @@ export function PosOpen({ register }: { register: { id: string; name: string } }
           </div>
         </div>
 
-        {error && <p className="mt-4 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</p>}
+        {error && (
+          <div className="mt-4 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-700">
+            <p>{error}</p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-1.5 text-xs uppercase tracking-wider underline"
+            >
+              Recargar la página
+            </button>
+          </div>
+        )}
+
+        {atorado && (
+          <p className="mt-4 rounded-lg bg-cream px-4 py-2.5 text-sm text-muted">
+            Caja abierta. Entrando…
+          </p>
+        )}
 
         <button
           type="submit"

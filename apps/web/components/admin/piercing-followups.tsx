@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatStore } from "@/lib/dates";
 import { useRouter } from "next/navigation";
 import { Loader2, Mail } from "lucide-react";
 import { sendFollowUpEmail } from "@/app/admin/perforaciones/actions";
@@ -19,7 +20,7 @@ const BUTTONS: { kind: PiercingEmailKind; label: string; hint: string }[] = [
 ];
 
 function fecha(iso: string) {
-  return new Date(iso).toLocaleString("es-MX", {
+  return formatStore(iso, {
     day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
   });
 }

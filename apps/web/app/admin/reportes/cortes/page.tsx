@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { storeDayRange } from "@/lib/dates";
+import { storeDayRange, formatStore } from "@/lib/dates";
 import { formatMXN } from "@/lib/utils";
 import { CutPrintButton } from "@/components/admin/cut-print-button";
 import { loadOpenSessions } from "@/lib/cash-report";
@@ -107,7 +107,7 @@ export default async function CortesPage({ searchParams }: { searchParams: Promi
             {open.map((s) => (
               <div key={s.id} className="flex flex-wrap justify-between gap-2">
                 <span>
-                  {s.registerName} · {s.cashier} · desde {new Date(s.openedAt).toLocaleString("es-MX")} · {s.salesCount} cobro(s)
+                  {s.registerName} · {s.cashier} · desde {formatStore(s.openedAt)} · {s.salesCount} cobro(s)
                 </span>
                 <span className="tabular-nums">Efectivo esperado {formatMXN(s.expectedCash)}</span>
               </div>
@@ -146,7 +146,7 @@ export default async function CortesPage({ searchParams }: { searchParams: Promi
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-ink">{reg(s.cash_registers)} · <span className="text-muted">Cajero: {names[s.cashier_id] ?? "—"}</span></p>
-                  <p className="text-xs text-muted">Lote {s.id.slice(0, 8)} · {s.closed_at ? new Date(s.closed_at).toLocaleString("es-MX") : ""}</p>
+                  <p className="text-xs text-muted">Lote {s.id.slice(0, 8)} · {s.closed_at ? formatStore(s.closed_at) : ""}</p>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="text-right">
@@ -172,7 +172,7 @@ export default async function CortesPage({ searchParams }: { searchParams: Promi
                   </>
                 )}
                 <Detail label="Transferencias" value={formatMXN(s.counted_transfer_cents ?? 0)} />
-                <Detail label="Apertura" value={new Date(s.opened_at).toLocaleString("es-MX")} />
+                <Detail label="Apertura" value={formatStore(s.opened_at)} />
                 {m && m.gastos > 0 && <Detail label="Gastos de caja" value={`− ${formatMXN(m.gastos)}`} />}
                 {m && m.ingresos > 0 && <Detail label="Ingresos a caja" value={`+ ${formatMXN(m.ingresos)}`} />}
               </div>

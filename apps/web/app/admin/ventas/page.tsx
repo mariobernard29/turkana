@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatStoreDate } from "@/lib/dates";
 import { LiveRefresh } from "@/components/live-refresh";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatMXN } from "@/lib/utils";
@@ -108,7 +109,7 @@ export default async function OrdersPage({
                     </Link>
                   </td>
                   <td className="px-6 py-4 text-muted">
-                    {new Date(o.created_at).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })}
+                    {formatStoreDate(o.created_at, { day: "2-digit", month: "short", year: "numeric" })}
                   </td>
                   <td className="px-6 py-4 text-ink">{customerName(o.customers)}</td>
                   <td className="px-6 py-4 text-muted">{o.channel === "pos" ? "POS" : "Online"}</td>

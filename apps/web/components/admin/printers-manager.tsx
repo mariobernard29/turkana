@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatStore } from "@/lib/dates";
 import { useRouter } from "next/navigation";
 import { Loader2, Printer, RotateCcw, Trash2 } from "lucide-react";
 import {
@@ -114,7 +115,7 @@ export function PrintersManager({
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-xs text-muted tabular-nums">
-                      {new Date(j.createdAt).toLocaleString("es-MX")}
+                      {formatStore(j.createdAt)}
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center justify-end gap-2">
@@ -194,7 +195,7 @@ function PrinterCard({
               {printer.online
                 ? "El agente está corriendo y la impresora responde"
                 : printer.lastSeenAt
-                  ? `Sin respuesta desde ${new Date(printer.lastSeenAt).toLocaleString("es-MX")}`
+                  ? `Sin respuesta desde ${formatStore(printer.lastSeenAt)}`
                   : "El agente nunca se ha conectado"}
             </p>
           </div>

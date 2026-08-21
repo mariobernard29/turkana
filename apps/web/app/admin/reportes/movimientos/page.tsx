@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatStore } from "@/lib/dates";
 import { ChevronLeft } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatMXN } from "@/lib/utils";
@@ -89,7 +90,7 @@ export default async function MovementsPage({ searchParams }: { searchParams: Pr
             {rows.length === 0 && <tr><td colSpan={6} className="px-6 py-12 text-center text-muted">Sin movimientos</td></tr>}
             {rows.map((m) => (
               <tr key={m.id} className="border-b border-ink/5 last:border-0">
-                <td className="px-6 py-3 text-muted">{new Date(m.created_at).toLocaleString("es-MX")}</td>
+                <td className="px-6 py-3 text-muted">{formatStore(m.created_at)}</td>
                 <td className="px-6 py-3 text-ink">{CASH_TYPE_LABEL[m.type] ?? m.type}</td>
                 <td className="px-6 py-3 text-muted">{m.method ? methodLabel(m.method) : "—"}</td>
                 <td className="px-6 py-3 text-muted">{m.reference_type ? REF_LABEL[m.reference_type] ?? m.reference_type : "—"}</td>

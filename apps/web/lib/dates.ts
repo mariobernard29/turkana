@@ -100,3 +100,24 @@ export function formatStore(
   const d = typeof at === "string" ? new Date(at) : at;
   return d.toLocaleString("es-MX", { timeZone: STORE_TZ, ...opts });
 }
+
+const SOLO_FECHA = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Sólo el día, en la zona de la tienda.
+ *
+ * Una cadena "2026-09-20" es un día del calendario, no un instante: si se
+ * interpreta como medianoche UTC y luego se pinta en hora de Los Mochis, se
+ * corre al día anterior. Por eso se ancla al mediodía, donde ningún desfase
+ * la puede mover de día.
+ */
+export function formatStoreDate(
+  at: Date | string,
+  opts: Intl.DateTimeFormatOptions = { day: "2-digit", month: "2-digit", year: "numeric" },
+): string {
+  const d =
+    typeof at === "string"
+      ? new Date(SOLO_FECHA.test(at) ? `${at}T12:00:00Z` : at)
+      : at;
+  return d.toLocaleDateString("es-MX", { timeZone: STORE_TZ, ...opts });
+}

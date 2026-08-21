@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { businessDayKey } from "@/lib/dates";
+import { businessDayKey, formatStoreDate } from "@/lib/dates";
 import { formatMXN } from "@/lib/utils";
 import { LayawaysManager, type LayawayRow } from "@/components/admin/layaways-manager";
 import { CreditsManager, type CreditRow } from "@/components/admin/credits-manager";
@@ -98,7 +98,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                   {orders.map((o) => (
                     <tr key={o.id} className="border-b border-ink/5 last:border-0 hover:bg-cream/50">
                       <td className="px-6 py-3"><Link href={`/admin/ventas/${o.id}`} className="text-ink hover:text-gold">{o.order_number}</Link></td>
-                      <td className="px-6 py-3 text-muted">{new Date(o.created_at).toLocaleDateString("es-MX")}</td>
+                      <td className="px-6 py-3 text-muted">{formatStoreDate(o.created_at)}</td>
                       <td className="px-6 py-3 text-muted">{o.channel === "pos" ? "POS" : "Online"}</td>
                       <td className="px-6 py-3"><span className={`rounded-full px-2.5 py-1 text-xs ${ORDER_STATUS_STYLE[o.status] ?? ""}`}>{ORDER_STATUS_LABEL[o.status] ?? o.status}</span></td>
                       <td className="px-6 py-3 text-right text-ink">{formatMXN(o.total_cents)}</td>

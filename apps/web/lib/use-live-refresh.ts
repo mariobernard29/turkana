@@ -28,9 +28,11 @@ const DEBOUNCE_MS = 800;
 // existencias— al instante; esto sólo recoge lo que RLS deja fuera.
 const FALLBACK_MS = 600_000;
 
-export function useLiveRefresh(tables: string[], opts?: { enabled?: boolean }) {
+export function useLiveRefresh(tables: string[], opts?: { enabled?: boolean; intervalMs?: number }) {
   const router = useRouter();
   const enabled = opts?.enabled ?? true;
+  // Una pantalla de estado quiere mirarse cada poco; el catálogo del POS no.
+  const intervalMs = opts?.intervalMs ?? FALLBACK_MS;
   // Se serializa para que el efecto no se reinicie en cada render por un array
   // literal nuevo.
   const key = tables.join(",");
@@ -75,7 +77,7 @@ export function useLiveRefresh(tables: string[], opts?: { enabled?: boolean }) {
     };
     document.addEventListener("visibilitychange", onVisible);
 
-    const poll = setInterval(refresh, FALLBACK_MS);
+    const poll = setInterval(refresh, intervalMs);
 
     return () => {
       if (timer.current) clearTimeout(timer.current);
@@ -83,5 +85,5 @@ export function useLiveRefresh(tables: string[], opts?: { enabled?: boolean }) {
       clearInterval(poll);
       supabase.removeChannel(channel);
     };
-  }, [key, enabled, router]);
+  }, [key, enabled, intervalMs, router]);
 }

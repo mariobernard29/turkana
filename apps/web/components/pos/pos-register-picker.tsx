@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Monitor, Tablet } from "lucide-react";
 import { selectRegister } from "@/app/pos/actions";
 import { setRegisterId } from "@/lib/offline/device";
+
+// Igual que en la apertura de caja: si la pantalla no avanza sola, se recarga.
+const ESPERA_ANTES_DE_RECARGAR = 6000;
 
 export type PickerRegister = {
   id: string;
@@ -20,17 +23,26 @@ export function PosRegisterPicker({ registers }: { registers: PickerRegister[] }
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (temporizador.current) clearTimeout(temporizador.current); }, []);
+
   const pick = async (id: string) => {
     setError(null);
     setBusy(id);
-    const res = await selectRegister(id);
-    if (!res.ok) {
+    try {
+      const res = await selectRegister(id);
+      if (!res.ok) {
+        setBusy(null);
+        setError(res.error ?? "No se pudo seleccionar la caja");
+        return;
+      }
+      setRegisterId(id);
+      router.refresh();
+      temporizador.current = setTimeout(() => window.location.reload(), ESPERA_ANTES_DE_RECARGAR);
+    } catch {
       setBusy(null);
-      setError(res.error ?? "Error");
-      return;
+      setError("No se pudo contactar al sistema. Revisa la conexión y vuelve a intentar.");
     }
-    setRegisterId(id);
-    router.refresh();
   };
 
   return (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatStore } from "@/lib/dates";
 import { useRouter } from "next/navigation";
 import { X, Loader2, Printer } from "lucide-react";
 import { getSessionTotals, closeSession } from "@/app/pos/actions";
@@ -85,7 +86,7 @@ export function PosClose({
         {!done && info && (
           <p className="mb-4 rounded-lg bg-cream px-4 py-2.5 text-xs text-muted">
             Turno de <span className="text-ink">{info.cashier}</span> · {info.registerName} · abierto{" "}
-            {new Date(info.openedAt).toLocaleString("es-MX")}. Incluye todo lo cobrado en la tienda durante el turno.
+            {formatStore(info.openedAt)}. Incluye todo lo cobrado en la tienda durante el turno.
           </p>
         )}
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatStore } from "@/lib/dates";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -104,7 +105,7 @@ export default async function OrderDetailPage({
         <div>
           <h1 className="text-3xl text-ink">{order.order_number}</h1>
           <p className="mt-1 text-sm text-muted">
-            {new Date(order.created_at).toLocaleString("es-MX")} · {order.channel === "pos" ? "POS" : "Online"}
+            {formatStore(order.created_at)} · {order.channel === "pos" ? "POS" : "Online"}
           </p>
         </div>
         <div className="flex items-center gap-3">

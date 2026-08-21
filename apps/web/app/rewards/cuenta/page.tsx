@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatStoreDate } from "@/lib/dates";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { Ticket } from "lucide-react";
@@ -100,7 +101,7 @@ export default async function RewardsAccountPage() {
                   {orderRows.map((o) => (
                     <tr key={o.id} className="border-b border-ink/5 last:border-0">
                       <td className="px-6 py-3 text-ink">{o.order_number}</td>
-                      <td className="px-6 py-3 text-muted">{new Date(o.created_at).toLocaleDateString("es-MX")}</td>
+                      <td className="px-6 py-3 text-muted">{formatStoreDate(o.created_at)}</td>
                       <td className="px-6 py-3 text-muted">{o.channel === "pos" ? "Tienda" : "Online"}</td>
                       <td className="px-6 py-3 text-muted">{STATUS_LABEL[o.status] ?? o.status}</td>
                       <td className="px-6 py-3 text-right text-ink">{formatMXN(o.total_cents)}</td>

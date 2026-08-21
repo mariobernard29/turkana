@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { businessDayKey } from "@/lib/dates";
+import { businessDayKey, formatStoreDate } from "@/lib/dates";
 import { buildLineItems } from "@/lib/sale-items";
 import { money, type ReceiptData } from "@/lib/escpos";
 import { methodLabel } from "@/lib/payments";
@@ -112,8 +112,8 @@ export async function createLayawayFromCart(input: {
   const c = cust as { full_name: string; phone: string | null } | null;
   const customerName = c?.full_name ?? "—";
   const saldo = total - anticipo;
-  const fecha = new Date(l.created_at).toLocaleDateString("es-MX");
-  const vence = input.dueDate ? new Date(`${input.dueDate}T12:00:00`).toLocaleDateString("es-MX") : "Sin fecha límite";
+  const fecha = formatStoreDate(l.created_at);
+  const vence = input.dueDate ? formatStoreDate(input.dueDate) : "Sin fecha límite";
   const piezas = built.lines.map((li) => `${li.quantity}× ${li.name}`).join(" · ");
 
   revalidatePath("/pos");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatStore } from "@/lib/dates";
 import { useRouter } from "next/navigation";
 import { Loader2, Monitor, Plus, Tablet } from "lucide-react";
 import { saveRegister, deactivateRegister, type RegisterRow } from "@/app/admin/ajustes/pos-actions";
@@ -56,7 +57,7 @@ export function RegistersManager({ registers }: { registers: RegisterRow[] }) {
                 </div>
                 <p className="mt-1 text-sm text-muted">
                   {r.openTurn
-                    ? `Turno abierto por ${r.openTurn.cashier} desde ${new Date(r.openTurn.openedAt).toLocaleString("es-MX")}`
+                    ? `Turno abierto por ${r.openTurn.cashier} desde ${formatStore(r.openTurn.openedAt)}`
                     : "Sin turno abierto"}
                 </p>
               </div>
@@ -87,7 +88,7 @@ export function RegistersManager({ registers }: { registers: RegisterRow[] }) {
                         <Icon className="h-4 w-4 text-muted" strokeWidth={1.5} />
                         <span className="text-ink">{PLATFORM_LABEL[d.platform ?? ""] ?? d.name}</span>
                         <span className="text-xs text-muted">
-                          {d.lastSeenAt ? `visto ${new Date(d.lastSeenAt).toLocaleString("es-MX")}` : "sin actividad"}
+                          {d.lastSeenAt ? `visto ${formatStore(d.lastSeenAt)}` : "sin actividad"}
                         </span>
                       </li>
                     );

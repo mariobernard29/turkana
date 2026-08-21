@@ -17,6 +17,14 @@ export const STORE = {
   },
 } as const;
 
+// Soporte técnico del sistema (no es el teléfono de la tienda: esto es a quién
+// llamar cuando el sistema falla). Se muestra en Ajustes → Ayuda.
+export const SUPPORT = {
+  phone: "5645008021",
+  phoneDisplay: "56 4500 8021",
+  manualUrl: "https://manual-turkana.netlify.app/",
+} as const;
+
 // Bolsa de regalo (producto fijo creado por fix_extras.sql). Usada por la casilla del checkout.
 export const GIFT_BAG = {
   variantId: "a0b10000-0000-4000-8000-000000000001",

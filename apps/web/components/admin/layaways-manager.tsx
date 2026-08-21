@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatStoreDate } from "@/lib/dates";
 import { useRouter } from "next/navigation";
 import { Loader2, Check, X } from "lucide-react";
 import { cancelLayaway } from "@/app/admin/clientes/actions";
@@ -41,7 +42,7 @@ export function LayawaysManager({ rows, showCustomer = true }: { rows: LayawayRo
                 <p className="text-ink">{l.item}{showCustomer && <span className="text-muted"> · {l.customer}</span>}</p>
                 <p className="text-xs text-muted">
                   {formatMXN(l.paid)} de {formatMXN(l.total)} · resta {formatMXN(pending)}
-                  {l.dueDate ? ` · vence ${new Date(l.dueDate).toLocaleDateString("es-MX")}` : ""}
+                  {l.dueDate ? ` · vence ${formatStoreDate(l.dueDate)}` : ""}
                   {!active && <span className="ml-1 uppercase">· {l.status}</span>}
                 </p>
               </div>

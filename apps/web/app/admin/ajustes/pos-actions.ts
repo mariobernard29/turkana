@@ -3,6 +3,7 @@
 // Cajas e impresoras: lo que antes había que tocar a mano en el SQL Editor.
 // Con dos puntos de cobro la tienda ya no puede depender de eso.
 import { revalidatePath } from "next/cache";
+import { formatStore } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildReceipt, type ReceiptData } from "@/lib/escpos";
@@ -272,7 +273,7 @@ export async function testPrint(printerId: string): Promise<{ ok: boolean; error
     items: [],
     subtotal: 0, tax: 0, total: 0,
     attendedBy: ctx.staff.fullName,
-    meta: [{ label: "Enviada", value: new Date().toLocaleString("es-MX") }],
+    meta: [{ label: "Enviada", value: formatStore(new Date()) }],
     notes: [
       "Si lees esto, la cola y el agente estan",
       "funcionando y la impresora responde.",
