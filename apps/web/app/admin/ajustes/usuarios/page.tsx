@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
-import { getStaffUsers, getRolesData, type StaffUser, type RolesData } from "../user-actions";
+import { getStaffDirectory, getRolesData, type StaffUser, type ArchivedUser, type RolesData } from "../user-actions";
 import { UsersManager } from "@/components/admin/users-manager";
 
 export const dynamic = "force-dynamic";
@@ -12,8 +12,14 @@ export default async function UsuariosSettingsPage() {
   const isAdmin = ["super_admin", "admin"].includes(staff.role ?? "");
 
   let users: StaffUser[] = [];
+  let archived: ArchivedUser[] = [];
   let rolesData: RolesData | null = null;
-  if (isAdmin) [users, rolesData] = await Promise.all([getStaffUsers(), getRolesData()]);
+  if (isAdmin) {
+    const [directory, roles] = await Promise.all([getStaffDirectory(), getRolesData()]);
+    users = directory.active;
+    archived = directory.archived;
+    rolesData = roles;
+  }
 
   return (
     <div className="space-y-6">
@@ -29,7 +35,7 @@ export default async function UsuariosSettingsPage() {
       </div>
 
       {isAdmin && rolesData ? (
-        <UsersManager users={users} roles={rolesData.roles} />
+        <UsersManager users={users} roles={rolesData.roles} archived={archived} canEditUsers={staff.role === "super_admin"} />
       ) : (
         <p className="rounded-2xl border border-ink/10 bg-white p-6 text-sm text-muted shadow-sm">
           La gestión de usuarios está disponible solo para administradores.
