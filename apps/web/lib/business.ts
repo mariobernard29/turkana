@@ -1,7 +1,6 @@
 // Datos de la tienda y fiscales para tickets/comprobantes.
 export const STORE = {
   brand: "TURKANA",
-  tagline: "JOYERÍA FINA",
   phone: "668 241 0761",
   instagram: "@turkana.mx",
   addressLines: [

@@ -140,6 +140,12 @@ export default async function PiercingDetailPage({
             <PiercingFollowups
               piercingId={p.id}
               hasEmail={Boolean(customer?.email)}
+              phone={customer?.phone ?? null}
+              message={{
+                customerName: customer?.full_name ?? "",
+                performedAt: p.performed_at,
+                spots,
+              }}
               sentAt={{
                 care: p.care_email_sent_at,
                 week: p.week_email_sent_at,

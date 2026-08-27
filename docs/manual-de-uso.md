@@ -390,9 +390,9 @@ Las perforaciones de oreja se registran en **Perforaciones**, en el panel de adm
 
 > Si el cliente ya existe (mismo correo o teléfono), el sistema **reutiliza su ficha** en vez de crear una repetida.
 
-### Los correos de seguimiento
+### Los mensajes de seguimiento
 
-Cada perforación manda tres correos:
+Cada perforación manda tres mensajes:
 
 - **Instrucciones de cuidado** — el mismo día.
 - **Seguimiento de la primera semana**.
@@ -406,9 +406,16 @@ En la lista de perforaciones se ve quién trae seguimiento pendiente:
 | 🟡 Semanal pendiente | Ya pasó una semana y no se ha mandado. |
 | 🔴 Mensual pendiente | Ya pasó un mes. Esto es lo más urgente. |
 
-Abre la perforación y toca el botón del correo que toca. El sistema anota que ya se mandó, así que no se manda dos veces.
+Abre la perforación y, arriba de los botones, elige por dónde lo vas a mandar:
 
-Revisa esta lista **una vez por semana**. El cartílago (las perforaciones altas y medias) tarda más en sanar que el lóbulo, y el texto del correo ya lo toma en cuenta solo.
+- **Email** — el sistema lo manda solo al correo del cliente.
+- **WhatsApp** — se abre el WhatsApp de la computadora en el chat del cliente, con el mensaje ya escrito. **Sólo falta darle enviar.**
+
+Luego toca el botón del seguimiento que toca. El sistema anota que ya se mandó, así que no se manda dos veces.
+
+> Es el mismo texto por los dos lados. Si el cliente no dejó correo, mándalo por WhatsApp; si no dejó teléfono, por correo.
+
+Revisa esta lista **una vez por semana**. El cartílago (las perforaciones altas y medias) tarda más en sanar que el lóbulo, y el texto del mensaje ya lo toma en cuenta solo.
 
 ---
 

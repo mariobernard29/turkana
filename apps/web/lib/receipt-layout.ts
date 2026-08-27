@@ -173,7 +173,6 @@ export function layoutReceipt(d: ReceiptData): ReceiptLine[] {
 
   center();
   out.push({ kind: "logo", fallback: STORE.brand });
-  line(spaced(STORE.tagline));
   line();
 
   // Datos fiscales del emisor (formato SAT), sólo en la nota de venta.

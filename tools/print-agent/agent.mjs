@@ -107,14 +107,12 @@ function testPage() {
   const b = [];
   const text = (s) => b.push(...Buffer.from(s, "ascii"));
   const line = (s = "") => text(s + "\n");
-  const spaced = (s) => s.split("").join(" ");
   b.push(ESC, 0x40);              // init
   b.push(ESC, 0x45, 0x01);        // negrita, como en los tickets de verdad
   b.push(ESC, 0x61, 0x01);        // centrado
   b.push(GS, 0x21, 0x11);         // doble alto y ancho
   line("TURKANA");
   b.push(GS, 0x21, 0x00);
-  line(spaced("JOYERIA FINA"));
   line("=".repeat(W));
   b.push(GS, 0x21, 0x01);         // doble alto para el titulo
   line("PAGINA DE PRUEBA");

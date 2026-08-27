@@ -126,18 +126,65 @@ export async function sendFollowUpEmail(id: string, kind: PiercingEmailKind): Pr
   });
   if (!res.ok) return res;
 
+  await markSent(db, id, kind, "email_sent", `${KIND_LABEL[kind]} enviado`, `${p.folio} → ${email}`);
+  return { ok: true };
+}
+
+// El envío por WhatsApp lo hace el navegador (abre wa.me con el mensaje armado),
+// así que aquí sólo queda registrar que ya se mandó: si no, la perforación
+// seguiría marcada como pendiente aunque el cliente ya tenga su seguimiento.
+export async function markFollowUpWhatsapp(id: string, kind: PiercingEmailKind): Promise<Res> {
+  await requireStaff();
+  if (!SENT_COL[kind]) return { ok: false, error: "Tipo de seguimiento desconocido" };
+  const db = createAdminClient();
+
+  const { data } = await db
+    .from("piercings")
+    .select("id, folio, customers(phone)")
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  const p = data as unknown as {
+    folio: string;
+    customers: { phone: string | null } | { phone: string | null }[] | null;
+  } | null;
+
+  if (!p) return { ok: false, error: "No se encontró la perforación" };
+  const phone = one(p.customers)?.phone?.trim();
+  if (!phone) return { ok: false, error: "El cliente no tiene teléfono registrado" };
+
+  await markSent(
+    db,
+    id,
+    kind,
+    "whatsapp_sent",
+    `${KIND_LABEL[kind]} enviado por WhatsApp`,
+    `${p.folio} → ${phone}`,
+  );
+  return { ok: true };
+}
+
+// Sella la columna del seguimiento y deja aviso en el dashboard.
+async function markSent(
+  db: ReturnType<typeof createAdminClient>,
+  id: string,
+  kind: PiercingEmailKind,
+  type: string,
+  title: string,
+  body: string,
+) {
   await db.from("piercings").update({ [SENT_COL[kind]]: new Date().toISOString() }).eq("id", id);
   await db.from("notifications").insert({
-    type: "email_sent",
-    title: `${KIND_LABEL[kind]} enviado`,
-    body: `${p.folio} → ${email}`,
+    type,
+    title,
+    body,
     data: { piercing_id: id, kind },
     target_role: "admin",
   });
 
   revalidatePath("/admin/perforaciones");
   revalidatePath(`/admin/perforaciones/${id}`);
-  return { ok: true };
 }
 
 export async function deletePiercing(id: string): Promise<Res> {
