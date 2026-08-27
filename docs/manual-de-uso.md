@@ -435,7 +435,7 @@ Se entra en **/admin**. Del lado izquierdo está el menú:
 | **Perforaciones** | Registro y seguimiento. |
 | **Rewards** | Puntos de los clientes. |
 | **Punto de venta** | Te lleva al POS. |
-| **Reportes** | Cortes, movimientos, resultados. |
+| **Reportes** | Indicadores, piezas vendidas, cortes y movimientos. |
 | **Ajustes** | Usuarios, permisos, datos del negocio, correo y contenido de la web. |
 
 Lo que puedes ver depende de tu rol. Si una sección no te aparece o te dice que no tienes permiso, es normal: pídelo a quien administra.
@@ -569,6 +569,28 @@ Los puntos vencen. En la ficha del cliente se ve su saldo y cuándo caduca.
 ---
 
 ## 20. Reportes
+
+La pantalla de **Reportes** abre con los números del periodo: arriba a la derecha eliges **Hoy, Semana, Mes o Año** y todo se recalcula.
+
+**Los indicadores.** Ventas e importe, **piezas vendidas** (unidades que salieron, no dinero), ticket promedio, piezas por venta, mostrador contra tienda en línea, **quién más vendió**, servicios y perforaciones, clientes atendidos y nuevos, descuentos otorgados, rewards generados y canjeados, créditos por cobrar, apartados y variantes agotadas.
+
+**Quién vendió** — la tabla trae, por cada persona: cuántas ventas hizo, cuántas piezas movió, cuánto importó y su ticket promedio. Los pedidos de la página web salen juntos como *Tienda en línea*, porque nadie los atendió en mostrador.
+
+**Los dos tops.** *Más vendidos por pieza* es lo que más se mueve —lo que hay que reponer—. *Los que más dejaron* es lo que más dinero deja. **Casi nunca son la misma lista**: lo barato encabeza el primero y lo caro el segundo.
+
+### Piezas vendidas
+
+**Reportes → Piezas vendidas** es el detalle: un renglón por código, con cuántas piezas salieron y cuánto importaron, ordenado de lo que más se vendió a lo que menos.
+
+Aquí el periodo se elige con **fechas libres**: llena **Desde** y **Hasta** y toca **Ver**. Si llenas las dos fechas, el atajo de arriba (Hoy/Semana/Mes/Año) se ignora. También puedes filtrar por **canal** (mostrador o tienda en línea) y decidir si incluyes los **servicios** —perforaciones y demás—, que por omisión no entran porque no son piezas de inventario.
+
+Sirve para saber qué reponer, para cotejar contra el inventario y para ver qué se movió en una temporada.
+
+### Bajar el reporte en PDF
+
+Las dos pantallas traen el botón **Descargar PDF**. El archivo sale con el logo y los datos de la tienda, el periodo que estabas viendo y las mismas tablas: se puede imprimir, archivar o mandar por correo.
+
+> El PDF respeta los filtros que tengas puestos. Si estás viendo sólo mostrador de una semana, eso es lo que se baja.
 
 **Reportes → Cortes** — el histórico de los cortes de caja, con las diferencias de cada uno. Arriba salen los turnos que quedaron abiertos sin cortar.
 

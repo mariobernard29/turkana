@@ -6,6 +6,7 @@ import { KpiCard } from "@/components/admin/kpi-card";
 import { formatMXN } from "@/lib/utils";
 import { businessRange, formatStore } from "@/lib/dates";
 import { loadOpenSessions, type OpenSession } from "@/lib/cash-report";
+import { PAID } from "@/lib/reports";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ async function loadKpis() {
     const { data } = await db
       .from("orders")
       .select("total_cents")
-      .in("status", ["paid", "completed", "delivered"])
+      .in("status", PAID)
       .is("deleted_at", null)
       .gte("created_at", from.toISOString())
       .lt("created_at", to.toISOString());
