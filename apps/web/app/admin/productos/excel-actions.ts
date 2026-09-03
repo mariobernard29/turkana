@@ -54,11 +54,6 @@ export async function exportProductsExcel(): Promise<{ ok: boolean; error?: stri
   const { data: loc } = await db.from("inventory_locations").select("id").eq("key", IMPORT_LOCATION).maybeSingle();
   const tiendaId = (loc as { id: string } | null)?.id ?? null;
 
-  const { data: prods } = await db.from("products")
-    .select("name, slug, sku, short_description, long_description, tags, seo_title, seo_description, categories(name), product_variants(sku, price_cents, attributes, position, deleted_at, stock_levels(quantity, location_id))")
-    .is("deleted_at", null)
-    .order("name");
-
   type Variant = {
     sku: string; price_cents: number; attributes: Record<string, string> | null;
     position: number | null; deleted_at: string | null;
@@ -72,8 +67,34 @@ export async function exportProductsExcel(): Promise<{ ok: boolean; error?: stri
     product_variants: Variant[] | null;
   };
 
+  // La API corta las respuestas en 1 000 filas, así que el catálogo se pide por
+  // páginas. Sin esto la plantilla salía incompleta y sin avisar —con 1 179
+  // piezas se bajaban 1 000— y quien la llenaba creía tener el catálogo entero:
+  // las que faltaban no se actualizaban, y sus códigos chocaban al reusarlos.
+  //
+  // Se avanza por lo que de verdad llegó y se corta con la página vacía, para no
+  // depender del tope exacto que tenga puesto el servidor. El desempate por id
+  // hace estable el orden: hay nombres repetidos y, sin él, entre página y
+  // página una pieza puede repetirse o perderse.
+  const PAGINA = 1000;
+  const prods: Row[] = [];
+  for (let desde = 0; ; ) {
+    const { data, error } = await db.from("products")
+      .select("name, slug, sku, short_description, long_description, tags, seo_title, seo_description, categories(name), product_variants(sku, price_cents, attributes, position, deleted_at, stock_levels(quantity, location_id))")
+      .is("deleted_at", null)
+      .order("name")
+      .order("id")
+      .range(desde, desde + PAGINA - 1);
+    if (error) return { ok: false, error: `No se pudo leer el catálogo: ${error.message}` };
+    const lote = (data as unknown as Row[]) ?? [];
+    prods.push(...lote);
+    if (!lote.length) break;
+    desde += lote.length;
+    if (prods.length > 100000) break; // por si el servidor ignorara el rango
+  }
+
   const rows: ProductExcelRow[] = [];
-  for (const p of (prods as unknown as Row[]) ?? []) {
+  for (const p of prods) {
     const variants = (p.product_variants ?? [])
       .filter((v) => !v.deleted_at)
       .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));

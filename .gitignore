@@ -43,3 +43,6 @@ pnpm-debug.log*
 
 # Config local del MCP (puede llevar credenciales en la URL)
 .mcp.json
+
+# Respaldos locales del catálogo (datos del negocio)
+respaldos/
