@@ -48,7 +48,8 @@ async function send(
   title: string,
   inner: string,
   audience: "admin" | "customer" = "admin",
-) {
+  attachments?: { filename: string; content: string }[], // content en base64
+): Promise<boolean> {
   const recipients = (Array.isArray(to) ? to : [to]).map((e) => e.trim()).filter(Boolean);
   const subtitle = audience === "customer" ? "JEWELRY" : "PANEL DE ADMINISTRACIÓN";
   const footer = audience === "customer"
@@ -57,7 +58,7 @@ async function send(
   const key = process.env.RESEND_API_KEY;
   if (!key || !key.startsWith("re_") || !recipients.length) {
     console.warn("[alerts] no se envía correo:", !recipients.length ? "destinatario vacío" : "RESEND_API_KEY no configurada");
-    return;
+    return false;
   }
   const label = recipients.join(", ");
   try {
@@ -67,20 +68,40 @@ async function send(
       body: JSON.stringify({
         from: process.env.EMAIL_FROM ?? "Turkana Jewelry <onboarding@resend.dev>",
         to: recipients, subject, html: layout(title, inner, subtitle, footer),
+        ...(attachments?.length ? { attachments } : {}),
       }),
     });
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
       console.error(`[alerts] Resend rechazó el correo a ${label}:`, (body as { message?: string }).message ?? r.status);
-    } else {
-      console.log(`[alerts] correo enviado a ${label}: ${subject}`);
+      return false;
     }
+    console.log(`[alerts] correo enviado a ${label}: ${subject}`);
+    return true;
   } catch (e) {
     console.error("[alerts] error enviando correo:", e);
+    return false;
   }
 }
 
 const row = (l: string, v: string) => `<tr><td style="padding:3px 0;color:#666">${l}</td><td style="padding:3px 0;text-align:right">${v}</td></tr>`;
+// Renglón de un CashPair: sangría para desgloses y negritas para la venta del turno.
+const pairRow = (p: { label: string; indent?: boolean; strong?: boolean }, v: string) =>
+  p.strong
+    ? `<tr><td style="padding:3px 0;color:#1a1a1a"><strong>${p.label}</strong></td><td style="padding:3px 0;text-align:right"><strong>${v}</strong></td></tr>`
+    : row(p.indent ? `&nbsp;&nbsp;&nbsp;${p.label}` : p.label, v);
+
+// Correo de administración con el mismo formato que las alertas (lo usa, p.ej.,
+// el reporte semanal de asistencia, que lleva el PDF adjunto).
+export function sendAdminEmail(
+  to: string[],
+  subject: string,
+  title: string,
+  inner: string,
+  attachments?: { filename: string; content: string }[],
+): Promise<boolean> {
+  return send(to, subject, title, inner, "admin", attachments);
+}
 
 // ── Pedido pagado: confirmación al cliente + alerta al admin ────────────────────
 export async function notifyOrderPaid(orderId: string) {
@@ -198,11 +219,11 @@ export async function notifyCashCut(r: CashCutReport) {
 
     ${head("Resumen del turno")}
     <table style="width:100%;border-collapse:collapse;font-size:13px">
-      ${row("Ventas del turno", String(r.sales.length))}
+      ${row("Número de ventas", String(r.sales.length))}
       ${dayRow}
-      ${summaryPairs(r.totals).map((p) => row(p.label, (p.negative ? "−" : "") + money(p.cents))).join("")}
+      ${summaryPairs(r.totals).map((p) => pairRow(p, (p.negative ? "−" : "") + money(p.cents))).join("")}
       <tr><td colspan="2" style="padding:8px 0 2px;font-weight:bold">Esperado</td></tr>
-      ${expectedPairs(r.totals).map((p) => row(p.label, money(p.cents))).join("")}
+      ${expectedPairs(r.totals).map((p) => pairRow(p, money(p.cents))).join("")}
       <tr><td colspan="2" style="padding:8px 0 2px;font-weight:bold">Contado</td></tr>
       ${countedPairs(r.counted).map((p) => row(p.label, money(p.cents))).join("")}
     </table>

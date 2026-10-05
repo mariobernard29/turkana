@@ -19,10 +19,10 @@ export default async function AdminLayout({
   const staff = await requireStaff();
 
   return (
-    <div className="flex min-h-screen bg-[#e6e2da]">
-      <Sidebar />
+    <div className="flex min-h-screen bg-[#e6e2da] print:bg-white">
+      <Sidebar role={staff.role} />
       <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-ink/10 bg-white px-6 py-4 shadow-sm">
+        <header className="flex items-center justify-between border-b print:hidden border-ink/10 bg-white px-6 py-4 shadow-sm">
           <div className="md:hidden">
             <span className="font-serif text-xl tracking-wide text-ink">TURKANA</span>
           </div>
@@ -36,7 +36,7 @@ export default async function AdminLayout({
             <LogoutButton />
           </div>
         </header>
-        <main className="flex-1 p-6 md:p-10">{children}</main>
+        <main className="flex-1 p-6 md:p-10 print:p-0">{children}</main>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { LogOut } from "lucide-react";
+import { Clock, LogOut } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { REGISTER_COOKIE } from "@/lib/pos-register";
@@ -40,6 +40,9 @@ export default async function PosLayout({
         <div className="flex items-center gap-4">
           <PosBootstrap />
           <span className="text-sm text-cream/70">{staff.fullName}</span>
+          <Link href="/pos/asistencia" className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-cream/60 transition-colors hover:text-cream">
+            <Clock className="h-4 w-4" strokeWidth={1.5} /> Asistencia
+          </Link>
           <Link href="/admin" className="text-xs uppercase tracking-wider text-cream/50 transition-colors hover:text-cream">
             Admin
           </Link>

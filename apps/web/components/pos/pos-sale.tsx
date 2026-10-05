@@ -304,6 +304,7 @@ export function PosSale({
                     { label: "Cambios", fn: () => setShowReturns(true) },
                     { label: overCashLimit ? "Caja · resguardo ⚠" : "Caja · resguardo / precorte", fn: () => setShowCaja(true) },
                     { label: "Corte de caja", fn: () => setShowClose(true) },
+                    { label: "Asistencia del personal", fn: () => router.push("/pos/asistencia") },
                   ].map((it) => (
                     <button
                       key={it.label}

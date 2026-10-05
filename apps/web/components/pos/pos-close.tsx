@@ -101,7 +101,11 @@ export function PosClose({
           <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-gold" /></div>
         ) : done ? (
           <div className="text-center">
-            <p className="text-sm text-muted">Efectivo esperado</p>
+            {/* La venta va primero y aparte: el esperado trae el fondo dentro. */}
+            <p className="text-sm text-muted">Venta del turno</p>
+            <p className="font-serif text-3xl text-ink">{formatMXN(totals.salesCents)}</p>
+            <p className="mt-1 mb-5 text-xs text-muted">Sin contar el fondo inicial de {formatMXN(totals.openingFloat)}</p>
+            <p className="text-sm text-muted">Efectivo esperado en caja (con fondo)</p>
             <p className="font-serif text-2xl text-ink">{formatMXN(done.expectedCash)}</p>
             <p className="mt-3 text-sm text-muted">Contado</p>
             <p className="font-serif text-2xl text-ink">{formatMXN(done.countedCash)}</p>
@@ -131,14 +135,14 @@ export function PosClose({
               {/* Cuenta movimientos de cobro, no cuentas: una venta dividida suma varios. */}
               <div className="flex justify-between text-muted"><span>Cobros registrados</span><span>{totals.salesCount}</span></div>
               {summaryPairs(totals).map((p) => (
-                <div key={p.label} className="flex justify-between text-muted">
+                <div key={p.label} className={cn("flex justify-between", p.strong ? "font-medium text-ink" : "text-muted", p.indent && "pl-3 text-xs")}>
                   <span>{p.label}</span>
                   <span className={p.negative ? "text-gold" : ""}>{p.negative ? "−" : ""}{formatMXN(p.cents)}</span>
                 </div>
               ))}
               <div className="mt-1 border-t border-ink/10 pt-1" />
               {expectedPairs(totals).map((p) => (
-                <div key={p.label} className="flex justify-between text-muted">
+                <div key={p.label} className={cn("flex justify-between text-muted", p.indent && "pl-3 text-xs")}>
                   <span>{p.label}</span><span className="text-ink">{formatMXN(p.cents)}</span>
                 </div>
               ))}

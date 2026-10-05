@@ -21,6 +21,10 @@ export type CashTotals = {
   expectedAmex: number;
   expectedTransfer: number;
   expectedCard: number; // 'card' legacy (tarjeta sin separar); 0 en turnos nuevos
+  // Lo VENDIDO en el turno (dinero cobrado por ventas), sin fondo ni fiado.
+  // El esperado de efectivo trae el fondo dentro y se leía como "venta + fondo".
+  salesCents: number;
+  salesByMethod: Record<string, number>;
   // Conteos e informativos.
   salesCount: number;
   discountsCents: number;
@@ -39,6 +43,7 @@ const emptyCashTotals = (openingFloat = 0): CashTotals => ({
   openingFloat,
   expectedCash: openingFloat, expectedDebit: 0, expectedCredit: 0,
   expectedAmex: 0, expectedTransfer: 0, expectedCard: 0,
+  salesCents: 0, salesByMethod: {},
   salesCount: 0, discountsCents: 0, refundsCents: 0, dropsCents: 0, precutsCents: 0,
   expensesCents: 0, outsCents: 0,
   layawayInCents: 0, creditInCents: 0, otherInCents: 0, creditSalesCents: 0,
@@ -73,7 +78,15 @@ export function computeCashTotals(
         t.salesCount++;
         // Fiado: la venta se registra pero no entró dinero al turno.
         if (m.method === "credit") t.creditSalesCents += amt;
-        else applyToMethod(t, m.method, amt);
+        else {
+          applyToMethod(t, m.method, amt);
+          // 'layaway' es la liquidación de un apartado: su dinero ya entró como abonos.
+          if (m.method !== "layaway") {
+            const k = m.method ?? "cash";
+            t.salesCents += amt;
+            t.salesByMethod[k] = (t.salesByMethod[k] ?? 0) + amt;
+          }
+        }
         break;
 
       case "in":
@@ -117,10 +130,22 @@ export function computeCashTotals(
 // ── Etiquetas compartidas por correo, ticket y UI del corte ──────────────────
 // Un solo lugar para el orden y los nombres (antes duplicados en tres archivos).
 
-export type CashPair = { label: string; cents: number; negative?: boolean };
+export type CashPair = { label: string; cents: number; negative?: boolean; indent?: boolean; strong?: boolean };
+
+// Orden fijo del desglose de la venta por método.
+const SALE_METHOD_ORDER = ["cash", "debit", "credit_card", "amex", "transfer", "card"];
 
 export function summaryPairs(t: CashTotals): CashPair[] {
-  const pairs: CashPair[] = [{ label: "Fondo inicial", cents: t.openingFloat }];
+  const pairs: CashPair[] = [{ label: "Venta del turno (sin fondo)", cents: t.salesCents, strong: true }];
+  const rank = (m: string) => {
+    const i = SALE_METHOD_ORDER.indexOf(m);
+    return i < 0 ? SALE_METHOD_ORDER.length : i;
+  };
+  const methods = Object.keys(t.salesByMethod).sort((a, b) => rank(a) - rank(b));
+  for (const m of methods) {
+    if (t.salesByMethod[m] !== 0) pairs.push({ label: methodLabel(m), cents: t.salesByMethod[m], indent: true });
+  }
+  pairs.push({ label: "Fondo inicial", cents: t.openingFloat });
   if (t.discountsCents > 0) pairs.push({ label: "Descuentos otorgados", cents: t.discountsCents, negative: true });
   if (t.refundsCents > 0) pairs.push({ label: "Reembolsos / cambios", cents: t.refundsCents, negative: true });
   if (t.dropsCents > 0) pairs.push({ label: "Resguardos", cents: t.dropsCents, negative: true });
@@ -136,7 +161,10 @@ export function summaryPairs(t: CashTotals): CashPair[] {
 
 export function expectedPairs(t: CashTotals): CashPair[] {
   const pairs: CashPair[] = [
-    { label: "Efectivo esperado", cents: t.expectedCash },
+    // El cajón se cuenta con el fondo dentro; por eso se aclara y se da aparte
+    // lo que corresponde entregar.
+    { label: "Efectivo esperado (con fondo)", cents: t.expectedCash },
+    { label: "A entregar (sin fondo)", cents: t.expectedCash - t.openingFloat, indent: true },
     { label: "Débito esperado", cents: t.expectedDebit },
     { label: "Crédito esperado", cents: t.expectedCredit },
     { label: "Amex esperado", cents: t.expectedAmex },

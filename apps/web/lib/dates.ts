@@ -121,3 +121,28 @@ export function formatStoreDate(
       : at;
   return d.toLocaleDateString("es-MX", { timeZone: STORE_TZ, ...opts });
 }
+
+/** Día de la semana en la tienda (0 = domingo). */
+export function storeWeekday(at: Date = new Date()): number {
+  const p = storeParts(at);
+  return new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay();
+}
+
+/** Día de la semana de una clave "YYYY-MM-DD" (0 = domingo). */
+export function dayKeyWeekday(dayKey: string): number {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+/** Suma (o resta) días a una clave "YYYY-MM-DD". */
+export function addDaysKey(dayKey: string, days: number): string {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/** Una hora de pared "HH:MM[:SS]" de ese día de la tienda, como instante real. */
+export function storeWallTime(dayKey: string, hhmm: string): Date {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  const [hh, mm, ss] = hhmm.split(":").map(Number);
+  return zonedToUtc(y, m, d, hh || 0, mm || 0, ss || 0);
+}

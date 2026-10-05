@@ -13,6 +13,7 @@ import {
   Wallet,
   BarChart3,
   Settings,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,20 +27,23 @@ const NAV = [
   { href: "/admin/rewards", label: "Rewards", icon: Ticket },
   { href: "/pos", label: "Punto de venta", icon: Wallet },
   { href: "/admin/reportes", label: "Reportes", icon: BarChart3 },
+  // Sólo super_admin: la página y sus acciones también lo exigen.
+  { href: "/admin/asistencia", label: "Asistencia", icon: Clock, superOnly: true },
   { href: "/admin/ajustes", label: "Ajustes", icon: Settings },
 ];
 
-export function Sidebar() {
+export function Sidebar({ role }: { role?: string | null }) {
   const pathname = usePathname();
+  const nav = NAV.filter((n) => !("superOnly" in n && n.superOnly) || role === "super_admin");
 
   return (
-    <aside className="hidden w-60 shrink-0 flex-col bg-ink px-4 py-8 text-cream md:flex">
+    <aside className="hidden w-60 shrink-0 flex-col bg-ink px-4 py-8 text-cream md:flex print:!hidden">
       <div className="mb-10 px-3">
         <p className="font-serif text-2xl leading-none tracking-wide text-white">TURKANA</p>
         <p className="mt-1 text-[10px] uppercase tracking-[0.3em] text-gold">Admin</p>
       </div>
       <nav className="flex flex-col gap-1">
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {nav.map(({ href, label, icon: Icon }) => {
           const active = href === "/admin"
             ? pathname === "/admin"
             : pathname.startsWith(href);

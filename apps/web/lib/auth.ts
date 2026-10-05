@@ -62,3 +62,11 @@ export async function requireStaff(redirectTo = "/admin"): Promise<Staff> {
   }
   return staff;
 }
+
+// Sólo el super admin (p.ej. asistencia del personal). Las server actions deben
+// llamarlo también: ocultar el menú no protege nada.
+export async function requireSuperAdmin(redirectTo = "/admin"): Promise<Staff> {
+  const staff = await requireStaff(redirectTo);
+  if (staff.role !== "super_admin") redirect("/admin?error=Sin%20permisos");
+  return staff;
+}

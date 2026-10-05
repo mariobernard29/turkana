@@ -37,6 +37,7 @@ export type OpenSession = {
   registerName: string;
   openedAt: string;
   expectedCash: number;
+  salesCents: number; // venta del turno, sin fondo
   salesCount: number;
 };
 
@@ -79,6 +80,7 @@ export async function loadOpenSessions(db: DB): Promise<OpenSession[]> {
       registerName: one(s.cash_registers)?.name ?? "Caja",
       openedAt: s.opened_at,
       expectedCash: totals.expectedCash,
+      salesCents: totals.salesCents,
       salesCount: totals.salesCount,
     };
   });

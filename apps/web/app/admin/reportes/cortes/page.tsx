@@ -109,7 +109,9 @@ export default async function CortesPage({ searchParams }: { searchParams: Promi
                 <span>
                   {s.registerName} · {s.cashier} · desde {formatStore(s.openedAt)} · {s.salesCount} cobro(s)
                 </span>
-                <span className="tabular-nums">Efectivo esperado {formatMXN(s.expectedCash)}</span>
+                <span className="tabular-nums">
+                  Venta {formatMXN(s.salesCents)} · efectivo esperado (con fondo) {formatMXN(s.expectedCash)}
+                </span>
               </div>
             ))}
           </div>

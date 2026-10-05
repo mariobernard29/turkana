@@ -55,14 +55,14 @@ export function buildCashCutReceipt(r: CashCutReport): ReceiptData {
     title: "Resumen del turno",
     rows: [
       // Cuentas del lote (no movimientos de cobro): cuadra con la lista de arriba.
-      { label: "Ventas", value: String(r.sales.length) },
-      ...summaryPairs(r.totals).map((p) => ({ label: p.label, value: money(p.cents), negative: p.negative })),
+      { label: "Número de ventas", value: String(r.sales.length) },
+      ...summaryPairs(r.totals).map((p) => ({ label: p.label, value: money(p.cents), negative: p.negative, indent: p.indent, strong: p.strong })),
     ],
   });
 
   sections.push({
     title: "Esperado",
-    rows: expectedPairs(r.totals).map((p) => ({ label: p.label, value: money(p.cents) })),
+    rows: expectedPairs(r.totals).map((p) => ({ label: p.label, value: money(p.cents), indent: p.indent })),
   });
 
   // Un turno abierto (precorte/consulta) todavía no tiene conteo.
