@@ -27,6 +27,10 @@ export async function saveEmployee(input: {
   code: string;
   pin?: string;
   active: boolean;
+  payFrequency: "weekly" | "biweekly";
+  payWeekday: number;
+  payKind: "hourly" | "salary" | null;
+  payAmountPesos: number | null;
 }): Promise<Res & { id?: string }> {
   const staff = await requireSuperAdmin();
   const fullName = input.fullName.trim();
@@ -36,9 +40,20 @@ export async function saveEmployee(input: {
   if (!/^\d{1,6}$/.test(code)) return { ok: false, error: "El código debe ser de 1 a 6 números" };
   if (!input.id && !pin) return { ok: false, error: "Asigna un PIN de 4 dígitos" };
   if (pin && !PIN_RE.test(pin)) return { ok: false, error: "El PIN debe ser de 4 números" };
+  if (!["weekly", "biweekly"].includes(input.payFrequency)) return { ok: false, error: "Elige cada cuándo cobra" };
+  if (!(input.payWeekday >= 0 && input.payWeekday <= 6)) return { ok: false, error: "Elige el día de pago" };
+  if (input.payKind && !["hourly", "salary"].includes(input.payKind)) return { ok: false, error: "Tipo de sueldo inválido" };
+  const amount = input.payKind && input.payAmountPesos != null ? Math.round(input.payAmountPesos * 100) : null;
+  if (amount != null && !(amount >= 0)) return { ok: false, error: "Revisa el sueldo" };
 
   const db = createAdminClient();
-  const row: Record<string, unknown> = { full_name: fullName, code, active: input.active };
+  const row: Record<string, unknown> = {
+    full_name: fullName, code, active: input.active,
+    pay_frequency: input.payFrequency,
+    pay_weekday: input.payWeekday,
+    pay_kind: amount != null ? input.payKind : null,
+    pay_amount_cents: amount,
+  };
   if (pin) Object.assign(row, { pin_hash: await hashPin(pin), failed_attempts: 0, locked_until: null });
 
   const { data, error } = input.id
@@ -53,7 +68,7 @@ export async function saveEmployee(input: {
     action: input.id ? "attendance.employee_update" : "attendance.employee_create",
     entity_type: "attendance_employee",
     entity_id: (data as { id: string }).id,
-    after: { full_name: fullName, code, active: input.active, pin_changed: Boolean(pin) },
+    after: { ...row, pin_hash: undefined, pin_changed: Boolean(pin) },
   });
   revalidatePath(PATH, "layout");
   return { ok: true, id: (data as { id: string }).id };

@@ -2022,3 +2022,21 @@ create unique index if not exists attendance_records_one_open
 alter table attendance_employees enable row level security;
 alter table attendance_schedules enable row level security;
 alter table attendance_records   enable row level security;
+
+-- 0033 · día de pago del personal (semanal o quincenal) y sueldo opcional.
+alter table attendance_employees
+  add column if not exists pay_frequency text not null default 'weekly',
+  add column if not exists pay_weekday smallint not null default 1,
+  add column if not exists pay_kind text,
+  add column if not exists pay_amount_cents integer;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'attendance_employees_pay_frequency_check') then
+    alter table attendance_employees
+      add constraint attendance_employees_pay_frequency_check check (pay_frequency in ('weekly', 'biweekly')),
+      add constraint attendance_employees_pay_weekday_check check (pay_weekday between 0 and 6),
+      add constraint attendance_employees_pay_kind_check check (pay_kind is null or pay_kind in ('hourly', 'salary')),
+      add constraint attendance_employees_pay_amount_check check (pay_amount_cents is null or pay_amount_cents >= 0);
+  end if;
+end $$;

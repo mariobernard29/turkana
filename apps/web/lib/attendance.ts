@@ -17,7 +17,20 @@ export const ATTENDANCE_DEFAULTS = {
 // Una entrada abierta más de esto se da por olvidada ("sin salida").
 export const MAX_OPEN_HOURS = 16;
 
-export type AttendanceEmployee = { id: string; full_name: string; code: string; active: boolean };
+export type PayFrequency = "weekly" | "biweekly";
+export type PayKind = "hourly" | "salary";
+
+export type AttendanceEmployee = {
+  id: string;
+  full_name: string;
+  code: string;
+  active: boolean;
+  pay_frequency?: PayFrequency;
+  pay_weekday?: number;          // semanal: día en que cobra (0 = domingo)
+  pay_kind?: PayKind | null;     // null = sin sueldo capturado
+  pay_amount_cents?: number | null;
+  created_at?: string;           // no cuenta faltas antes de que existiera
+};
 export type AttendanceSchedule = { employee_id: string; weekday: number; start_time: string; end_time: string };
 export type AttendanceRecord = {
   id: string;
@@ -126,6 +139,7 @@ export function buildAttendanceReport(input: {
   const tol = Math.max(0, input.toleranceMin);
 
   const employees = input.employees.map((employee) => {
+    const sinceKey = employee.created_at ? businessDayKey(new Date(employee.created_at)) : null;
     const mine = input.records
       .filter((r) => r.employee_id === employee.id)
       .sort((a, b) => a.clock_in.localeCompare(b.clock_in));
@@ -169,7 +183,9 @@ export function buildAttendanceReport(input: {
       const extraMin = scheduledMin > 0 ? Math.max(0, workedMin - scheduledMin) : workedMin;
 
       // Falta: tenía horario, no checó, y su hora de salida ya pasó.
-      const absent = recs.length === 0 && !!current && (dayKey < todayKey || (dayKey === todayKey && now > current.end));
+      // Ni antes de darla de alta: alguien nuevo no "faltó" la semana pasada.
+      const absent = recs.length === 0 && !!current && (!sinceKey || dayKey >= sinceKey)
+        && (dayKey < todayKey || (dayKey === todayKey && now > current.end));
 
       return {
         dayKey,
@@ -247,4 +263,62 @@ export function dayStatus(d: AttendanceDay): string {
   if (d.records.length > 0 && d.restDay) parts.push("Día de descanso");
   if (!parts.length && d.records.length > 0) parts.push("A tiempo");
   return parts.join(" · ");
+}
+
+// ── Periodos de pago ────────────────────────────────────────────────────────
+//
+// Semanal: cobra cada `pay_weekday` por los 7 días que terminan el día anterior
+// (si cobra el lunes, se le pagan lunes a domingo de la semana previa).
+// Quincenal: del 1 al 15 (se paga el 15) y del 16 al fin de mes (se paga el
+// último día).
+
+export type PayPeriod = { fromKey: string; toKey: string; payDayKey: string };
+
+function lastDayOfMonth(dayKey: string): string {
+  const [y, m] = dayKey.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+}
+
+/** Periodo de pago que contiene el día `dayKey`. */
+export function payPeriodFor(
+  e: Pick<AttendanceEmployee, "pay_frequency" | "pay_weekday">,
+  dayKey: string,
+): PayPeriod {
+  if (e.pay_frequency === "biweekly") {
+    const month = dayKey.slice(0, 7);
+    const day = Number(dayKey.slice(8, 10));
+    if (day <= 15) return { fromKey: `${month}-01`, toKey: `${month}-15`, payDayKey: `${month}-15` };
+    const last = lastDayOfMonth(dayKey);
+    return { fromKey: `${month}-16`, toKey: last, payDayKey: last };
+  }
+  const payWd = e.pay_weekday ?? 1;
+  const endWd = (payWd + 6) % 7; // el periodo cierra el día anterior al de pago
+  const toKey = addDaysKey(dayKey, (endWd - dayKeyWeekday(dayKey) + 7) % 7);
+  return { fromKey: addDaysKey(toKey, -6), toKey, payDayKey: addDaysKey(toKey, 1) };
+}
+
+/** Periodo anterior / siguiente a uno dado. */
+export function shiftPayPeriod(
+  e: Pick<AttendanceEmployee, "pay_frequency" | "pay_weekday">,
+  p: PayPeriod,
+  dir: -1 | 1,
+): PayPeriod {
+  return payPeriodFor(e, dir < 0 ? addDaysKey(p.fromKey, -1) : addDaysKey(p.toKey, 1));
+}
+
+/**
+ * Lo que toca pagar con lo capturado: por hora = horas trabajadas × tarifa;
+ * sueldo fijo = el sueldo del periodo (las faltas se muestran aparte para que
+ * el administrador decida si descuenta). null si no hay sueldo capturado.
+ */
+export function payAmountCents(e: AttendanceEmployee, workedMin: number): number | null {
+  if (!e.pay_kind || e.pay_amount_cents == null) return null;
+  if (e.pay_kind === "hourly") return Math.round((workedMin / 60) * e.pay_amount_cents);
+  return e.pay_amount_cents;
+}
+
+export function payScheduleLabel(e: Pick<AttendanceEmployee, "pay_frequency" | "pay_weekday">): string {
+  return e.pay_frequency === "biweekly"
+    ? "Quincenal (15 y fin de mes)"
+    : `Semanal · cobra el ${WEEKDAYS[e.pay_weekday ?? 1].toLowerCase()}`;
 }

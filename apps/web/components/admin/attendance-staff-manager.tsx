@@ -5,7 +5,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, Pencil, X } from "lucide-react";
 import { saveEmployee, saveSchedule } from "@/app/admin/asistencia/actions";
-import { WEEKDAYS, type AttendanceEmployee, type AttendanceSchedule } from "@/lib/attendance";
+import {
+  payScheduleLabel, WEEKDAYS,
+  type AttendanceEmployee, type AttendanceSchedule, type PayFrequency, type PayKind,
+} from "@/lib/attendance";
+import { formatMXN } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
 // Lunes primero en pantalla: así lo lee la gente aunque internamente 0 = domingo.
@@ -61,6 +65,11 @@ export function AttendanceStaffManager({
                 <p className="truncate text-xs text-muted">
                   {scheduleSummary(schedules.filter((s) => s.employee_id === e.id))}
                 </p>
+                <p className="truncate text-xs text-gold">
+                  {payScheduleLabel(e)}
+                  {e.pay_kind && e.pay_amount_cents != null &&
+                    ` · ${formatMXN(e.pay_amount_cents)} ${e.pay_kind === "hourly" ? "por hora" : e.pay_frequency === "biweekly" ? "por quincena" : "por semana"}`}
+                </p>
               </div>
               <button onClick={() => setEditing(e)} className="shrink-0 text-muted hover:text-ink" aria-label="Editar">
                 <Pencil className="h-4 w-4" />
@@ -95,6 +104,12 @@ function EmployeeModal({
   const [code, setCode] = useState(employee?.code ?? "");
   const [pin, setPin] = useState("");
   const [active, setActive] = useState(employee?.active ?? true);
+  const [payFrequency, setPayFrequency] = useState<PayFrequency>(employee?.pay_frequency ?? "weekly");
+  const [payWeekday, setPayWeekday] = useState(employee?.pay_weekday ?? 1);
+  const [payKind, setPayKind] = useState<PayKind | "">(employee?.pay_kind ?? "");
+  const [payAmount, setPayAmount] = useState(
+    employee?.pay_amount_cents != null ? String(employee.pay_amount_cents / 100) : "",
+  );
   const [days, setDays] = useState<Record<number, DayRow>>(() => {
     const out: Record<number, DayRow> = {};
     for (let d = 0; d < 7; d++) {
@@ -123,7 +138,12 @@ function EmployeeModal({
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const res = await saveEmployee({ id: employee?.id, fullName: name, code, pin: pin || undefined, active });
+    const res = await saveEmployee({
+      id: employee?.id, fullName: name, code, pin: pin || undefined, active,
+      payFrequency, payWeekday,
+      payKind: payKind && payAmount !== "" ? payKind : null,
+      payAmountPesos: payKind && payAmount !== "" ? Number(payAmount) : null,
+    });
     if (!res.ok) { setBusy(false); setError(res.error ?? "Error"); return; }
 
     const id = res.id ?? employee?.id;
@@ -169,6 +189,38 @@ function EmployeeModal({
               <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
               Activo (si lo desactivas ya no puede checar; su historial se conserva)
             </label>
+          )}
+        </div>
+
+        <div className="mt-6">
+          <p className={label}>Pago</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <select className={field} value={payFrequency} onChange={(e) => setPayFrequency(e.target.value as PayFrequency)}>
+              <option value="weekly">Semanal</option>
+              <option value="biweekly">Quincenal (15 y fin de mes)</option>
+            </select>
+            {payFrequency === "weekly" ? (
+              <select className={field} value={payWeekday} onChange={(e) => setPayWeekday(Number(e.target.value))}>
+                {ORDER.map((d) => <option key={d} value={d}>Cobra el {WEEKDAYS[d].toLowerCase()}</option>)}
+              </select>
+            ) : (
+              <p className="self-center text-xs text-muted">Periodos del 1 al 15 y del 16 a fin de mes.</p>
+            )}
+            <select className={field} value={payKind} onChange={(e) => setPayKind(e.target.value as PayKind | "")}>
+              <option value="">Sin sueldo capturado</option>
+              <option value="salary">Sueldo fijo por {payFrequency === "biweekly" ? "quincena" : "semana"}</option>
+              <option value="hourly">Pago por hora</option>
+            </select>
+            {payKind && (
+              <input type="number" min="0" step="0.01" inputMode="decimal" className={field} value={payAmount}
+                onChange={(e) => setPayAmount(e.target.value)} placeholder={payKind === "hourly" ? "$ por hora" : "$ por periodo"} />
+            )}
+          </div>
+          {payFrequency === "weekly" && (
+            <p className="mt-1 text-xs text-muted">
+              Cobra el {WEEKDAYS[payWeekday].toLowerCase()} por los 7 días anteriores
+              ({WEEKDAYS[payWeekday].toLowerCase()} a {WEEKDAYS[(payWeekday + 6) % 7].toLowerCase()}).
+            </p>
           )}
         </div>
 

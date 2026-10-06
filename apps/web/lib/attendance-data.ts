@@ -1,11 +1,12 @@
 // Carga de datos de asistencia (servidor, service_role). Las tablas tienen RLS
 // sin políticas: sólo se llega a ellas desde aquí, detrás de un guard.
 import { createAdminClient } from "@/lib/supabase/admin";
-import { storeDayRange } from "@/lib/dates";
+import { businessDayKey, storeDayRange } from "@/lib/dates";
 import { parseAlertEmails } from "@/lib/admin-alerts";
 import {
-  ATTENDANCE_DEFAULTS, buildAttendanceReport,
+  ATTENDANCE_DEFAULTS, buildAttendanceReport, payAmountCents, payPeriodFor, shiftPayPeriod,
   type AttendanceEmployee, type AttendanceRecord, type AttendanceReport, type AttendanceSchedule,
+  type EmployeeReport, type PayPeriod,
 } from "@/lib/attendance";
 
 type DB = ReturnType<typeof createAdminClient>;
@@ -48,7 +49,7 @@ export async function setSetting(db: DB, key: string, value: string) {
 }
 
 export async function loadEmployees(db: DB, includeInactive = false): Promise<AttendanceEmployee[]> {
-  let q = db.from("attendance_employees").select("id, full_name, code, active").order("full_name");
+  let q = db.from("attendance_employees").select("id, full_name, code, active, pay_frequency, pay_weekday, pay_kind, pay_amount_cents, created_at").order("full_name");
   if (!includeInactive) q = q.eq("active", true);
   const { data } = await q;
   return (data as unknown as AttendanceEmployee[]) ?? [];
@@ -102,4 +103,60 @@ export async function loadAttendanceReport(
     employees, schedules, records, fromKey, toKey, toleranceMin: settings.toleranceMin,
   });
   return { report, settings };
+}
+
+// ── Nómina: cuánto toca pagarle a cada quien en su periodo ───────────────────
+
+export type PayrollView = "pagar" | "curso" | "fecha";
+
+export type PayrollRow = {
+  employee: AttendanceEmployee;
+  period: PayPeriod;
+  totals: EmployeeReport["totals"];
+  amountCents: number | null;
+};
+
+/**
+ * Cada persona tiene su propio periodo (semanal o quincenal):
+ *  - "pagar": el último periodo cuyo día de pago ya llegó (lo que hay que pagar).
+ *  - "curso": el periodo que está corriendo hoy.
+ *  - "fecha": el periodo que contiene `refKey`.
+ */
+export async function loadPayroll(
+  view: PayrollView,
+  refKey?: string,
+  db: DB = createAdminClient(),
+): Promise<{ rows: PayrollRow[]; settings: AttendanceSettings }> {
+  const today = businessDayKey();
+  const [settings, employees, schedules] = await Promise.all([
+    getAttendanceSettings(db),
+    loadEmployees(db, false),
+    loadSchedules(db),
+  ]);
+
+  const periods = employees.map((e) => {
+    if (view === "fecha" && refKey) return payPeriodFor(e, refKey);
+    const current = payPeriodFor(e, today);
+    if (view === "curso") return current;
+    return current.payDayKey <= today ? current : shiftPayPeriod(e, current, -1);
+  });
+  if (!employees.length) return { rows: [], settings };
+
+  const fromKey = periods.reduce((m, p) => (p.fromKey < m ? p.fromKey : m), periods[0].fromKey);
+  const toKey = periods.reduce((m, p) => (p.toKey > m ? p.toKey : m), periods[0].toKey);
+  const records = await loadRecords(db, fromKey, toKey);
+
+  const rows = employees.map((employee, i) => {
+    const period = periods[i];
+    const { employees: [r] } = buildAttendanceReport({
+      employees: [employee],
+      schedules,
+      records: records.filter((x) => x.employee_id === employee.id),
+      fromKey: period.fromKey,
+      toKey: period.toKey,
+      toleranceMin: settings.toleranceMin,
+    });
+    return { employee, period, totals: r.totals, amountCents: payAmountCents(employee, r.totals.workedMin) };
+  });
+  return { rows, settings };
 }
