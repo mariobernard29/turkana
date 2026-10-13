@@ -206,7 +206,7 @@ async function applySale(
     if (l.tracksInventory && (smap.get(l.variantId) ?? 0) < l.quantity)
       return { ok: false, conflict: true, error: `Sin stock suficiente para ${l.sku}` };
     goods += l.totalCents;
-    orderItems.push({ variant_id: l.variantId, sku: l.sku, name: l.name, unit_price_cents: l.unitPriceCents, quantity: l.quantity, total_cents: l.totalCents });
+    orderItems.push({ variant_id: l.variantId, sku: l.sku, name: l.name, unit_price_cents: l.unitPriceCents, quantity: l.quantity, total_cents: l.totalCents, is_service: false });
     ticketItems.push({ name: l.name, sku: l.sku, quantity: l.quantity, total_cents: l.totalCents });
   }
 
