@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ProductCard, type CatalogProduct } from "@/components/shop/product-card";
-import { Reveal } from "@/components/shop/reveal";
+import { Reveal, Words, Rule } from "@/components/shop/reveal";
 
 export type FeaturedCollection = {
   slug: string;
@@ -31,7 +31,7 @@ export function FeaturedCollectionSection({
             <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted">{collection.subtitle}</p>
           )}
         </Link>
-        <span className="mx-auto mt-4 block h-px w-16 bg-gold/50" />
+        <Rule className="mt-4" />
       </Reveal>
 
       <div className="grid gap-6 md:grid-cols-2">

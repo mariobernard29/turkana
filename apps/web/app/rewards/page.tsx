@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Ticket, Sparkles, Gift, UserPlus, Gem } from "lucide-react";
 import { ShopHeader } from "@/components/shop/header";
 import { ShopFooter } from "@/components/shop/footer";
+import { Rule } from "@/components/shop/reveal";
 
 export const metadata = { title: "Turkana Rewards — Únete al club" };
 
@@ -63,7 +64,7 @@ export default function RewardsMarketingPage() {
         <div className="text-center">
           <p className="text-xs uppercase tracking-[0.3em] text-gold">Programa de lealtad</p>
           <h2 className="mt-2 font-serif text-3xl text-ink sm:text-4xl">Beneficios de ser miembro</h2>
-          <span className="mx-auto mt-4 block h-px w-16 bg-gold/50" />
+          <Rule className="mt-4" />
         </div>
         <div className="mt-14 grid gap-12 sm:grid-cols-3">
           {BENEFITS.map((b) => (

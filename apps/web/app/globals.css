@@ -30,3 +30,80 @@ h1, h2, h3 {
   font-weight: 400;
   letter-spacing: 0.01em;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Movimiento
+   Lo de abajo es lo que separa una página "de plantilla" de una que se siente
+   hecha: la tipografía entra por palabras, las reglas se dibujan, la foto del
+   hero respira. Todo con CSS; nada de esto carga JavaScript de más.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* Tira que corre sin fin. El contenido se duplica en el componente, así que
+   moverse -50% deja la segunda copia exactamente donde estaba la primera. */
+@keyframes turkana-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* La foto del hero deriva despacio. A 20s nadie la ve moverse; lo que se nota
+   es que la imagen no está muerta. */
+@keyframes turkana-drift {
+  from { transform: scale(1) translate3d(0, 0, 0); }
+  to   { transform: scale(1.08) translate3d(0, -1.5%, 0); }
+}
+
+/* Brillo que cruza una vez, para el oro. */
+@keyframes turkana-sheen {
+  from { background-position: -150% 0; }
+  to   { background-position: 250% 0; }
+}
+
+.turkana-drift { animation: turkana-drift 20s ease-out forwards; }
+
+/* Grano. Una capa de ruido casi invisible sobre los fondos planos: es lo que
+   evita que el crema se vea como un #faf8f5 y empiece a verse como papel. */
+.turkana-grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.22'/%3E%3C/svg%3E");
+}
+
+/* Subrayado que se dibuja de izquierda a derecha al pasar el cursor. */
+.turkana-underline {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 0% 1px;
+  transition: background-size 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.turkana-underline:hover { background-size: 100% 1px; }
+
+/* Botón sólido: en vez de cambiar de color de golpe, el oro sube desde abajo. */
+.turkana-fill {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.turkana-fill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-color: var(--color-gold-dark);
+  transform: translateY(101%);
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.turkana-fill:hover::before { transform: translateY(0); }
+
+/* Quien pide menos movimiento, recibe menos movimiento. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .turkana-drift,
+  [data-turkana-marquee] > * { animation: none !important; }
+  .turkana-underline,
+  .turkana-fill::before { transition: none; }
+}

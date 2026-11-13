@@ -4,7 +4,7 @@ import { ShopHeader } from "@/components/shop/header";
 import { ShopFooter } from "@/components/shop/footer";
 import { ProductCard, type CatalogProduct } from "@/components/shop/product-card";
 import { EditorialTile } from "@/components/shop/editorial-tile";
-import { Reveal } from "@/components/shop/reveal";
+import { Reveal, Words, Rule } from "@/components/shop/reveal";
 
 export const dynamic = "force-dynamic";
 
@@ -100,19 +100,23 @@ export default async function ShopPage({
   return (
     <div className="min-h-screen">
       <ShopHeader />
-      <main className="mx-auto max-w-6xl px-6 py-12">
-        <div className="mb-10 text-center">
-          <h1 className="font-serif text-4xl text-ink">La colección</h1>
-          <p className="mt-3 text-sm text-muted">Piezas atemporales, hechas para perdurar</p>
-          <span className="mx-auto mt-4 block h-px w-16 bg-gold/50" />
+      <main className="mx-auto max-w-6xl px-6 py-14 md:py-20">
+        {/* Encabezado a la izquierda, como portada de catálogo impreso. Centrado
+            quedaba igual que el de las otras cuatro secciones del sitio. */}
+        <div className="mb-10 max-w-xl">
+          <Words as="h1" text="La colección" className="font-serif text-[2.6rem] leading-none text-ink sm:text-5xl" />
+          <Reveal delay={260}>
+            <p className="mt-4 text-sm text-muted">Piezas atemporales, hechas para perdurar</p>
+          </Reveal>
+          <Rule align="left" className="mt-6" />
         </div>
 
         {/* Filtros por categoría */}
-        <div className="mb-10 flex flex-wrap items-center justify-center gap-3 text-xs uppercase tracking-widest">
+        <div className="mb-12 flex flex-wrap items-center gap-2.5 text-[0.68rem] uppercase tracking-[0.2em]">
           <Link
             href="/tienda"
-            className={`rounded-full border px-4 py-2 transition-colors ${
-              !categoria ? "border-ink bg-ink text-cream" : "border-ink/15 text-muted hover:border-gold"
+            className={`rounded-full border px-4 py-2 transition-colors duration-300 ${
+              !categoria ? "border-ink bg-ink text-cream" : "border-ink/15 text-muted hover:border-gold hover:text-ink"
             }`}
           >
             Todo
@@ -121,8 +125,8 @@ export default async function ShopPage({
             <Link
               key={c.slug}
               href={`/tienda?categoria=${c.slug}`}
-              className={`rounded-full border px-4 py-2 transition-colors ${
-                categoria === c.slug ? "border-ink bg-ink text-cream" : "border-ink/15 text-muted hover:border-gold"
+              className={`rounded-full border px-4 py-2 transition-colors duration-300 ${
+                categoria === c.slug ? "border-ink bg-ink text-cream" : "border-ink/15 text-muted hover:border-gold hover:text-ink"
               }`}
             >
               {c.name}
