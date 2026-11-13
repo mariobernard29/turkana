@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { Search, Eye, EyeOff, ImageOff } from "lucide-react";
 import { formatMXN } from "@/lib/utils";
+import { setProductOnline } from "@/app/admin/productos/actions";
 
 type VariantRow = { price_cents: number };
 export type ProductRow = {
@@ -11,8 +12,10 @@ export type ProductRow = {
   name: string;
   sku: string | null;
   status: string;
+  hidden_online: boolean;
   categories: { name: string } | null;
   product_variants: VariantRow[];
+  product_images: { id: string }[];
 };
 
 function priceRange(variants: VariantRow[]): string {
@@ -28,6 +31,50 @@ const STATUS_STYLE: Record<string, string> = {
   draft: "bg-amber-50 text-amber-700",
   archived: "bg-gray-100 text-gray-500",
 };
+
+// Botón de publicar / quitar de la tienda en línea. La tienda se llena a mano:
+// todo nace oculto y desde aquí se elige, pieza por pieza, qué sale a la web.
+function OnlineToggle({ product }: { product: ProductRow }) {
+  const [hidden, setHidden] = useState(product.hidden_online);
+  const [pending, start] = useTransition();
+  const sinFoto = (product.product_images ?? []).length === 0;
+
+  function toggle() {
+    const visible = hidden; // si está oculta, el clic la publica
+    start(async () => {
+      const res = await setProductOnline(product.id, visible);
+      if (!res.ok) {
+        alert(res.error ?? "No se pudo cambiar");
+        return;
+      }
+      setHidden(!visible);
+    });
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      disabled={pending}
+      title={
+        hidden
+          ? sinFoto
+            ? "Para publicarla necesita al menos una foto"
+            : "Publicar en la tienda en línea"
+          : "Quitar de la tienda en línea"
+      }
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors disabled:opacity-50 ${
+        hidden
+          ? "border-ink/15 text-muted hover:border-gold hover:text-ink"
+          : "border-green-600/30 bg-green-50 text-green-700 hover:border-green-600"
+      }`}
+    >
+      {hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+      {hidden ? "Oculta" : "En la tienda"}
+      {hidden && sinFoto && <ImageOff className="h-3.5 w-3.5 text-amber-600" />}
+    </button>
+  );
+}
 
 export function ProductsTable({ products }: { products: ProductRow[] }) {
   const [query, setQuery] = useState("");
@@ -71,6 +118,7 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
                 <th className="px-6 py-4 font-medium">Variantes</th>
                 <th className="px-6 py-4 font-medium">Precio</th>
                 <th className="px-6 py-4 font-medium">Estado</th>
+                <th className="px-6 py-4 font-medium">Tienda en línea</th>
               </tr>
             </thead>
             <tbody>
@@ -89,6 +137,9 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
                     <span className={`rounded-full px-3 py-1 text-xs ${STATUS_STYLE[p.status] ?? ""}`}>
                       {p.status}
                     </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <OnlineToggle product={p} />
                   </td>
                 </tr>
               ))}

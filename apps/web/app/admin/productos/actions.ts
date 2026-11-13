@@ -85,7 +85,7 @@ export async function saveProduct(
     seo_description: input.seo_description || null,
     status: input.status,
     is_featured: input.is_featured,
-    hidden_online: input.hidden_online ?? false,
+    hidden_online: input.hidden_online ?? true,
     track_inventory: input.track_inventory ?? true,
   };
 
@@ -200,5 +200,50 @@ export async function deleteProductImage(
   const db = createAdminClient();
   await db.from("product_images").delete().eq("id", imageId);
   await db.storage.from("product-images").remove([storagePath]);
+  return { ok: true };
+}
+
+// Publicar / quitar de la tienda en línea desde la lista, sin abrir el producto.
+// La tienda se llena a mano: todo nace oculto y aquí se va eligiendo qué sale.
+//
+// Para publicar se exige lo mínimo que la tienda necesita para no verse rota:
+// estado activo, al menos una foto y al menos una talla a la venta. Quitar de la
+// tienda nunca se bloquea.
+export async function setProductOnline(
+  id: string,
+  visible: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireStaff();
+  const db = createAdminClient();
+
+  if (visible) {
+    const { data } = await db
+      .from("products")
+      .select("status, categories(name, hidden_online), product_images(id), product_variants(id, is_active)")
+      .eq("id", id)
+      .maybeSingle();
+    const p = data as unknown as {
+      status: string;
+      categories: { name: string; hidden_online: boolean } | { name: string; hidden_online: boolean }[] | null;
+      product_images: { id: string }[];
+      product_variants: { id: string; is_active: boolean }[];
+    } | null;
+    if (!p) return { ok: false, error: "La pieza ya no existe" };
+    if (p.status !== "active")
+      return { ok: false, error: "Primero ponla en Activo: en borrador o archivada no sale en la tienda" };
+    if ((p.product_images ?? []).length === 0)
+      return { ok: false, error: "Súbele al menos una foto antes de publicarla" };
+    if (!(p.product_variants ?? []).some((v) => v.is_active))
+      return { ok: false, error: "No tiene ninguna talla a la venta" };
+    const cat = Array.isArray(p.categories) ? p.categories[0] : p.categories;
+    if (cat?.hidden_online)
+      return { ok: false, error: `Su categoría “${cat.name}” está oculta en la tienda: muéstrala primero` };
+  }
+
+  const { error } = await db.from("products").update({ hidden_online: !visible }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin/productos");
+  revalidatePath("/tienda");
+  revalidatePath("/");
   return { ok: true };
 }

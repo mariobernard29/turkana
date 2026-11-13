@@ -85,7 +85,7 @@ export function ProductForm({
     initial?.status ?? "draft",
   );
   const [isFeatured, setIsFeatured] = useState(initial?.is_featured ?? false);
-  const [hiddenOnline, setHiddenOnline] = useState(initial?.hidden_online ?? false);
+  const [hiddenOnline, setHiddenOnline] = useState(initial?.hidden_online ?? true);
   const [trackInventory, setTrackInventory] = useState(initial?.track_inventory ?? true);
 
   const [variants, setVariants] = useState<VariantState[]>(

@@ -36,7 +36,11 @@ En **Settings → Business settings** completa:
   Mochis, Sinaloa.
 - **Nombre que aparece en el estado de cuenta del cliente** (statement descriptor):
   `TURKANA JEWELRY` (máx. 22 caracteres, se ve en el cargo de la tarjeta).
-- **Sitio web:** la URL de producción (`turkanajewelry.com`).
+- **Sitio web:** la URL de producción (`turkanajewerly.com`).
+
+> ⚠️ El dominio comprado es **`turkanajewerly.com`** — así, con "jewerly". No es
+> errata de este documento: es como quedó registrado y es el que está verificado
+> en Resend. Escríbelo igual en Stripe o la verificación de dominio falla.
 
 > Sin activar la cuenta solo funciona el **modo de prueba** (test). Para cobrar de
 > verdad hay que completar y aprobar la activación.
@@ -87,7 +91,7 @@ supabase secrets set STRIPE_SECRET_KEY=sk_test_...
 ## 5. Verificar el dominio (para Apple Pay / Google Pay)
 
 1. **Settings → Payments → Payment methods → Apple Pay → Configure domains.**
-2. Agrega `turkanajewelry.com` (y el dominio de Vercel si usas uno temporal).
+2. Agrega `turkanajewerly.com` (y el dominio de Vercel si usas uno temporal).
 3. Stripe te pide subir un archivo de verificación; con **Stripe Checkout** (la
    opción que usamos) la verificación de Apple Pay es automática al usar el dominio
    registrado. Para Stripe Elements sí hay que subir el archivo a
@@ -97,36 +101,49 @@ supabase secrets set STRIPE_SECRET_KEY=sk_test_...
 
 ## 6. Configurar los Webhooks
 
-El backend escucha eventos de Stripe en la Edge Function `stripe-webhook`.
+El webhook vive **dentro de la app de Next.js**, no en Supabase:
+`apps/web/app/api/stripe/webhook/route.ts`. Es el que marca la orden como
+pagada, descuenta el inventario, canjea el saldo Rewards y manda los correos.
+Sin él, el cliente paga y la orden se queda en "pendiente" para siempre.
+
+> La carpeta `supabase/functions/create-checkout` es de una versión vieja del
+> proyecto y ya no se usa: no hay ninguna Edge Function desplegada.
 
 ### 6.1 Endpoint en producción
 
 1. **Developers → Webhooks → Add endpoint.**
 2. **Endpoint URL:**
    ```
-   https://<PROJECT_REF>.functions.supabase.co/stripe-webhook
+   https://TU-DOMINIO/api/stripe/webhook
    ```
-   (reemplaza `<PROJECT_REF>` por el ref de tu proyecto Supabase).
-3. **Eventos a escuchar** (selecciona exactamente estos):
+   (por ejemplo `https://turkanajewerly.com/api/stripe/webhook`; si todavía no
+   conectas el dominio, el de Vercel: `https://turkana.vercel.app/api/stripe/webhook`).
+3. **Eventos a escuchar** (selecciona exactamente estos cuatro — son los que el
+   código atiende; los demás los ignora):
    - `checkout.session.completed`
-   - `payment_intent.processing`   ← OXXO: voucher generado
    - `payment_intent.succeeded`
    - `payment_intent.payment_failed`
    - `charge.refunded`
 4. Crea el endpoint y copia el **Signing secret** → `whsec_...`.
+5. Ponlo en **Vercel → Settings → Environment Variables** como
+   `STRIPE_WEBHOOK_SECRET` (entorno Production) y vuelve a desplegar.
 
-```bash
-supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...
-```
+> ⚠️ El `whsec_` del modo **test** y el del modo **live** son distintos. Si pones
+> el de test en producción, Stripe manda el evento, la firma no cuadra y la orden
+> nunca se marca como pagada. En los logs de Vercel se ve como
+> `[webhook] firma inválida`.
 
 ### 6.2 Pruebas en local (Stripe CLI)
 
 ```bash
 stripe login
-stripe listen --forward-to http://localhost:54321/functions/v1/stripe-webhook
-# La CLI imprime un whsec_... temporal para tu entorno local:
-supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...   # el de la CLI
+stripe listen --forward-to http://localhost:3000/api/stripe/webhook
+```
 
+La CLI imprime un `whsec_...` temporal; cópialo a `apps/web/.env.local` en
+`STRIPE_WEBHOOK_SECRET` y reinicia `npm run dev`.
+
+```bash
 # Disparar eventos de prueba:
 stripe trigger checkout.session.completed
 stripe trigger payment_intent.succeeded
@@ -177,8 +194,13 @@ Cuando tengas la cuenta lista, mándame (o ponlos tú en los `.env`):
 | Variable | Dónde | Valor |
 |----------|-------|-------|
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Vercel + `.env.local` | `pk_live_...` (o `pk_test_...` en dev) |
-| `STRIPE_SECRET_KEY` | Supabase secret | `sk_live_...` |
-| `STRIPE_WEBHOOK_SECRET` | Supabase secret | `whsec_...` del endpoint |
-| `<PROJECT_REF>` | — | ref del proyecto Supabase (para la URL del webhook) |
+| `STRIPE_SECRET_KEY` | Vercel + `.env.local` | `sk_live_...` |
+| `STRIPE_WEBHOOK_SECRET` | Vercel + `.env.local` | `whsec_...` del endpoint |
+| `NEXT_PUBLIC_SITE_URL` | Vercel | `https://turkanajewerly.com` (sin diagonal final) |
 
-Con eso las Edge Functions `create-checkout` y `stripe-webhook` quedan operativas.
+Las tres de Stripe van **todas en Vercel** (no en Supabase): el cobro y el
+webhook corren dentro de la app de Next.js.
+
+`NEXT_PUBLIC_SITE_URL` es con la que se arman las ligas de regreso de Stripe. Si
+se queda en `http://localhost:3000`, el cliente paga y Stripe lo devuelve a una
+página que no existe en su computadora.

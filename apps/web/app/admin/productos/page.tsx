@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 // Filtros del lado del servidor: filtrar en el cliente filtraría un conjunto ya
 // truncado y el conteo mentiría.
-type Filters = { cat?: string; estado?: string };
+type Filters = { cat?: string; estado?: string; tienda?: string };
 const STATUSES = ["draft", "active", "archived"] as const;
 const STATUS_LABEL: Record<string, string> = { draft: "Borrador", active: "Activo", archived: "Archivado" };
 
@@ -23,12 +23,15 @@ async function loadProducts(f: Filters): Promise<ProductRow[]> {
     return await fetchAll<ProductRow>((from, to) => {
       let q = db
         .from("products")
-        .select("id, name, sku, status, categories(name), product_variants(price_cents)")
+        .select("id, name, sku, status, hidden_online, categories(name), product_variants(price_cents), product_images(id)")
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .range(from, to);
       if (f.cat) q = q.eq("category_id", f.cat);
       if (f.estado && (STATUSES as readonly string[]).includes(f.estado)) q = q.eq("status", f.estado);
+      // La tienda en línea se llena a mano: este filtro es para ir viendo qué ya salió.
+      if (f.tienda === "publicados") q = q.eq("hidden_online", false);
+      if (f.tienda === "ocultos") q = q.eq("hidden_online", true);
       return q;
     });
   } catch {
@@ -49,7 +52,8 @@ async function loadCategories() {
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<Filters> }) {
   const f = await searchParams;
   const [products, categories] = await Promise.all([loadProducts(f), loadCategories()]);
-  const filtered = Boolean(f.cat || f.estado);
+  const filtered = Boolean(f.cat || f.estado || f.tienda);
+  const publicados = products.filter((p) => !p.hidden_online).length;
   const inputCls = "rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm outline-none focus:border-gold";
 
   return (
@@ -69,6 +73,10 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           <h1 className="text-3xl text-ink">Productos</h1>
           <p className="mt-1 text-sm text-muted">
             {products.length} piezas {filtered ? "en el filtro" : "en catálogo"}
+            {" · "}
+            <span className={publicados > 0 ? "text-ink" : undefined}>
+              {publicados} en la tienda en línea
+            </span>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -96,6 +104,14 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           <select name="estado" defaultValue={f.estado ?? ""} className={inputCls}>
             <option value="">Todos</option>
             {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs uppercase tracking-wider text-muted">Tienda en línea</label>
+          <select name="tienda" defaultValue={f.tienda ?? ""} className={inputCls}>
+            <option value="">Todas</option>
+            <option value="publicados">Publicadas</option>
+            <option value="ocultos">Ocultas</option>
           </select>
         </div>
         <button type="submit" className="rounded-full bg-ink px-6 py-2 text-sm uppercase tracking-widest text-cream hover:bg-gold-dark">Filtrar</button>

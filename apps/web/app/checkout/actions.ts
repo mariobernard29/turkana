@@ -40,11 +40,18 @@ export async function startCheckout(
   // ── Variantes (precio y nombre desde la BD, nunca del cliente) ─────────────
   const { data: vData } = await db
     .from("product_variants")
-    .select("id, sku, price_cents, is_active, attributes, products(name, slug, track_inventory)")
+    .select(
+      "id, sku, price_cents, is_active, attributes, products(name, slug, track_inventory, status, hidden_online, deleted_at, categories(hidden_online))",
+    )
     .in("id", ids);
+  type Prod = {
+    name: string; slug: string; track_inventory: boolean;
+    status: string; hidden_online: boolean; deleted_at: string | null;
+    categories: { hidden_online: boolean } | { hidden_online: boolean }[] | null;
+  };
   const variants = (vData as unknown as {
     id: string; sku: string; price_cents: number; is_active: boolean; attributes: Record<string, string> | null;
-    products: { name: string; slug: string; track_inventory: boolean } | { name: string; slug: string; track_inventory: boolean }[] | null;
+    products: Prod | Prod[] | null;
   }[]) ?? [];
   const vmap = new Map(variants.map((v) => [v.id, v]));
 
@@ -72,6 +79,20 @@ export async function startCheckout(
     const v = vmap.get(item.variantId);
     if (!v || !v.is_active) return { ok: false, error: "Un producto ya no está disponible" };
     const prod = Array.isArray(v.products) ? v.products[0] : v.products;
+
+    // La pieza tiene que estar publicada en la tienda. El carrito manda IDs de
+    // variante, así que sin esta revisión se podía cobrar una pieza que solo
+    // existe en el mostrador (oculta, borrador o de categoría oculta): no se ve
+    // en la web, pero el cobro pasaba.
+    const prodCat = Array.isArray(prod?.categories) ? prod?.categories[0] : prod?.categories;
+    const publicada =
+      prod != null &&
+      prod.status === "active" &&
+      prod.hidden_online === false &&
+      prod.deleted_at == null &&
+      !prodCat?.hidden_online;
+    if (!publicada) return { ok: false, error: "Un producto ya no está disponible" };
+
     // Productos sin control de inventario (bolsa de regalo, kits) no validan stock.
     if (prod?.track_inventory !== false) {
       const avail = smap.get(item.variantId) ?? 0;

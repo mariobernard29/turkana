@@ -23,12 +23,28 @@ type RawProduct = {
 async function loadCatalog(categoria?: string) {
   const supabase = await createClient();
 
-  const { data: categories } = await supabase
+  // Sólo las categorías que de verdad tienen algo publicado. El catálogo trae
+  // más de sesenta y la tienda se llena a mano: sin esto, el cliente ve una
+  // fila de filtros que casi todos llevan a "no hay productos en esta vista".
+  const { data: conProductos } = await supabase
+    .from("products")
+    .select("category_id")
+    .eq("status", "active")
+    .eq("hidden_online", false)
+    .is("deleted_at", null)
+    .not("category_id", "is", null);
+  const idsConProductos = new Set(
+    ((conProductos as unknown as { category_id: string }[]) ?? []).map((r) => r.category_id),
+  );
+
+  const { data: todasLasCategorias } = await supabase
     .from("categories")
-    .select("name, slug")
+    .select("id, name, slug")
     .is("deleted_at", null)
     .eq("hidden_online", false)
     .order("name");
+  const categories = ((todasLasCategorias as unknown as { id: string; name: string; slug: string }[]) ?? [])
+    .filter((c) => idsConProductos.has(c.id));
 
   let query = supabase
     .from("products")
@@ -70,10 +86,7 @@ async function loadCatalog(categoria?: string) {
     })
     .filter((p): p is CatalogProduct => p !== null);
 
-  return {
-    products,
-    categories: (categories as unknown as { name: string; slug: string }[]) ?? [],
-  };
+  return { products, categories };
 }
 
 export default async function ShopPage({

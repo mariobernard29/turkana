@@ -141,24 +141,24 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* Productos destacados */}
-      <section className="mx-auto max-w-6xl px-6 py-16 md:py-20">
-        <Reveal className="mb-10 text-center">
-          <p className="text-xs uppercase tracking-[0.3em] text-gold">Selección</p>
-          <h2 className="mt-2 font-serif text-3xl text-ink sm:text-4xl">Productos destacados</h2>
-          <span className="mx-auto mt-4 block h-px w-16 bg-gold/50" />
-        </Reveal>
-        {featured.length > 0 ? (
+      {/* Productos destacados. Sin nada publicado la sección entera no se pinta:
+          antes salía un recado para el admin ("marca productos como destacados…")
+          en la portada, a la vista del cliente. */}
+      {featured.length > 0 && (
+        <section className="mx-auto max-w-6xl px-6 py-16 md:py-20">
+          <Reveal className="mb-10 text-center">
+            <p className="text-xs uppercase tracking-[0.3em] text-gold">Selección</p>
+            <h2 className="mt-2 font-serif text-3xl text-ink sm:text-4xl">Productos destacados</h2>
+            <span className="mx-auto mt-4 block h-px w-16 bg-gold/50" />
+          </Reveal>
           <div className="grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 lg:grid-cols-4">
             {featured.map((p, idx) => <Reveal key={p.slug} delay={idx * 80}><ProductCard product={p} /></Reveal>)}
           </div>
-        ) : (
-          <p className="text-center text-muted">Marca productos como “destacados” en el admin para mostrarlos aquí.</p>
-        )}
-        <div className="mt-12 text-center">
-          <Link href="/tienda" className="inline-block rounded-full border border-ink/20 px-8 py-3 text-sm uppercase tracking-widest text-ink transition-colors hover:border-gold hover:bg-gold hover:text-cream">Ver todo</Link>
-        </div>
-      </section>
+          <div className="mt-12 text-center">
+            <Link href="/tienda" className="inline-block rounded-full border border-ink/20 px-8 py-3 text-sm uppercase tracking-widest text-ink transition-colors hover:border-gold hover:bg-gold hover:text-cream">Ver todo</Link>
+          </div>
+        </section>
+      )}
 
       {/* Colección destacada (administrable desde el admin) */}
       {featuredCollection && (
