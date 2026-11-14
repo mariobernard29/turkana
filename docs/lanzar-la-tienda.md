@@ -19,7 +19,8 @@ catálogo, la otra de configuración), pero **no abras la tienda sin la parte 4*
 | Piezas publicadas en la tienda | **0 — todas ocultas a propósito** |
 | Piezas con foto | ninguna de las que estaban publicadas |
 | Tienda en vivo | <https://turkana-phi.vercel.app> — **con código viejo** |
-| Stripe | **Modo prueba** (`pk_test` / `sk_test`) |
+| Stripe — cuenta | Activada, MXN, tarjetas y OXXO listos, webhook creado |
+| Stripe — llaves en la app | **Todavía las de prueba** (`pk_test` / `sk_test`) |
 | `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` |
 | Correos (Resend) | Configurados para `contacto@turkanajewerly.com` |
 | POS y admin | Funcionando |
@@ -111,9 +112,10 @@ de cuenta; si dice otra cosa, llegan aclaraciones).
 
 Sin la cuenta activada sólo existe el modo prueba.
 
-### 2.2 Métodos de pago
+### 2.2 Métodos de pago — ✅ verificado el 13/11/2026
 
-**Settings → Payments → Payment methods**: tarjetas ✅, **OXXO ✅**, SPEI ❌.
+**Settings → Payments → Payment methods**: Tarjetas **habilitado**, OXXO
+**habilitado**. Es lo que pide el checkout (`payment_method_types: ["card", "oxxo"]`).
 
 OXXO topa alrededor de $10,000 MXN por voucher y el pago tarda hasta 3 días.
 
@@ -129,32 +131,49 @@ OXXO topa alrededor de $10,000 MXN por voucher y el pago tarda hasta 3 días.
 Van en **Vercel → Settings → Environment Variables**, entorno **Production**.
 La `sk_live_` nunca en el navegador ni en el POS.
 
-### 2.4 Webhook ← esto es lo que falta y lo que más duele si se olvida
+### 2.4 Webhook — ✅ creado el 13/11/2026
 
 El webhook es el que marca la orden como pagada, descuenta el inventario, canjea
 el saldo Rewards y manda los correos. **Sin él, la clienta paga y la orden se
 queda en "pendiente" para siempre.**
 
-1. Stripe (modo **Live**) → **Developers → Webhooks → Add endpoint**.
-2. URL — **la de la dirección que esté usando la tienda**:
-   - hoy, con la de Vercel: `https://turkana-phi.vercel.app/api/stripe/webhook`
-   - cuando conectes el dominio: `https://turkanajewerly.com/api/stripe/webhook`
+Ya está dado de alta en la cuenta, en modo Live:
 
-   > Si cambias de dirección después, **actualiza también el endpoint en Stripe**.
-   > Si se queda apuntando a la vieja y la nueva no responde, las clientas pagan y
-   > las órdenes se quedan en "pendiente". Puedes tener los dos endpoints dados de
-   > alta mientras haces el cambio, no estorba.
-3. Eventos (exactamente estos cuatro):
-   - `checkout.session.completed`
-   - `payment_intent.succeeded`
-   - `payment_intent.payment_failed`
-   - `charge.refunded`
-4. Copia el **Signing secret** (`whsec_…`) → Vercel, `STRIPE_WEBHOOK_SECRET`.
-5. **Vuelve a desplegar** para que tome las variables nuevas.
+| | |
+|---|---|
+| Nombre | Turkana - tienda en linea |
+| ID | `we_1UbVew3auqIAXcBEUdJM8DF1` |
+| URL | `https://turkana-phi.vercel.app/api/stripe/webhook` |
+| Estado | Activo |
+| Formato | Snapshot (el que lee nuestro código) |
+| Versión de API | 2026-05-27.dahlia |
+| Eventos | `checkout.session.completed`, `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded` |
+
+**Falta un paso, y es tuyo:** copiar el **Signing secret** (`whsec_…`) de esa
+página y ponerlo en Vercel como `STRIPE_WEBHOOK_SECRET`. Después, **vuelve a
+desplegar** para que tome la variable.
 
 > El `whsec_` de prueba y el de live son distintos. Si queda el de prueba, Stripe
 > manda el evento, la firma no cuadra y la orden nunca se marca pagada. En los
 > logs de Vercel se ve como `[webhook] firma inválida`.
+
+> **Si después conectas el dominio**, actualiza también la URL del endpoint en
+> Stripe. Si se queda apuntando a la vieja y la nueva no responde, las clientas
+> pagan y las órdenes se quedan en "pendiente". Puedes tener los dos endpoints
+> dados de alta mientras haces el cambio, no estorba.
+
+#### Sobre la versión de API
+
+Nuestro código fija `2024-06-20` (en `apps/web/lib/stripe.ts`) y el webhook
+entrega en `2026-05-27.dahlia`, que es la versión actual de la cuenta. Stripe ya
+no ofrece la de 2024 en esa lista: la más vieja disponible es 2025-02-24.
+
+No debería dar problema —el handler sólo lee campos que no han cambiado entre
+versiones (`metadata`, `payment_status`, `amount_total`, `amount_received`,
+`latest_charge`)—, pero es justo el tipo de cosa que se descubre con el primer
+cobro real. En la prueba de la Parte 4, pon atención especial a que **el pedido
+OXXO se registre como método "oxxo"** y no como "stripe": esa es la única lectura
+sensible a la versión (`payment_method_types`).
 
 ### 2.5 Branding
 
