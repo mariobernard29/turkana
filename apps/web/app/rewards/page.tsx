@@ -15,7 +15,7 @@ const BENEFITS = [
 
 const STEPS = [
   { n: "01", t: "Crea tu cuenta", d: "Regístrate gratis con tu correo en menos de un minuto." },
-  { n: "02", t: "Compra como siempre", d: "En tienda o en línea, tu cuenta acumula tus beneficios automáticamente." },
+  { n: "02", t: "Compra como siempre", d: "En tienda o en línea, tus compras quedan ligadas a tu cuenta." },
   { n: "03", t: "Disfruta tus recompensas", d: "Recibe cupones, acceso anticipado y sorpresas directo a tu correo." },
 ];
 

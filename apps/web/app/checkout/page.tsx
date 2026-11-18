@@ -15,7 +15,7 @@ export default async function CheckoutPage() {
       <main className="mx-auto max-w-5xl px-6 py-12">
         <h1 className="mb-10 text-4xl text-ink">Finalizar compra</h1>
         <CheckoutForm
-          customer={customer ? { name: customer.fullName, email: customer.email ?? "", balanceCents: customer.balanceCents } : null}
+          customer={customer ? { name: customer.fullName, email: customer.email ?? "" } : null}
           shipping={ship}
         />
       </main>

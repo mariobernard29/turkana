@@ -3,6 +3,7 @@
 // Imprimir (la página tiene estilos de impresión), bajar PDF y mandar por correo.
 import { useState } from "react";
 import { FileDown, Loader2, Mail, Printer } from "lucide-react";
+import { descargarBase64 } from "@/lib/download";
 import { attendancePdf, sendReportNow } from "@/app/admin/asistencia/actions";
 
 export function AttendanceReportActions({
@@ -23,13 +24,7 @@ export function AttendanceReportActions({
     try {
       const res = await attendancePdf(fromKey, toKey, employeeId);
       if (!res.ok || !res.fileBase64) { setMsg({ ok: false, text: res.error ?? "No se pudo generar el PDF" }); return; }
-      const bytes = Uint8Array.from(atob(res.fileBase64), (c) => c.charCodeAt(0));
-      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = res.fileName ?? "asistencia.pdf";
-      a.click();
-      URL.revokeObjectURL(url);
+      descargarBase64(res.fileBase64, res.fileName ?? "asistencia.pdf", "application/pdf");
     } catch {
       setMsg({ ok: false, text: "No se pudo contactar al servidor. Revisa la conexión a internet e inténtalo de nuevo." });
     } finally {

@@ -9,6 +9,7 @@
 // alrededor de ella.
 import { useState } from "react";
 import { FileDown, Loader2 } from "lucide-react";
+import { descargarBase64 } from "@/lib/download";
 import { kpiReportPdf, piecesReportPdf } from "@/app/admin/reportes/pdf-actions";
 import type { PiecesFilters, Range } from "@/lib/reports";
 
@@ -38,13 +39,7 @@ export function ReportPdfButton({ kind, range, desde, hasta, filters, label }: P
         return;
       }
 
-      const bytes = Uint8Array.from(atob(res.fileBase64), (c) => c.charCodeAt(0));
-      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = res.fileName ?? "reporte.pdf";
-      a.click();
-      URL.revokeObjectURL(url);
+      descargarBase64(res.fileBase64, res.fileName ?? "reporte.pdf", "application/pdf");
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo generar el PDF");
     } finally {

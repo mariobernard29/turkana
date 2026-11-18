@@ -58,7 +58,6 @@ export async function buildKpiPdf(
       { label: "Tienda en línea", value: formatMXN(r.sales.online) },
       { label: "Servicios vendidos", value: String(r.services), hint: `${r.piercings} perforaciones` },
       { label: "Descuentos otorgados", value: formatMXN(r.sales.discounts) },
-      { label: "Rewards generados", value: formatMXN(r.sales.rewardsEarned), hint: `Canjeados ${formatMXN(r.sales.rewardsRedeemed)}` },
       { label: "Clientes atendidos", value: String(r.clientes.atendidos), hint: `${r.clientes.nuevos} nuevos` },
       { label: "Créditos por cobrar", value: formatMXN(r.creditOutstanding) },
       { label: "Apartados activos", value: String(r.layawaysActive), hint: `Saldo ${formatMXN(r.layawayPending)}` },

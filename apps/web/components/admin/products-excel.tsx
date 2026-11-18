@@ -10,6 +10,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Upload, Loader2 } from "lucide-react";
+import { descargarBase64 } from "@/lib/download";
 import {
   exportProductsExcel, parseProductsExcel, importProductsChunk, logProductsImport,
   type ImportSummary,
@@ -35,15 +36,11 @@ export function ProductsExcel() {
     setBusy(null);
     if (!res.ok || !res.fileBase64) { setError(res.error ?? "No se pudo generar el archivo"); return; }
 
-    const bytes = Uint8Array.from(atob(res.fileBase64), (c) => c.charCodeAt(0));
-    const url = URL.createObjectURL(new Blob([bytes], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = res.fileName ?? "productos.xlsx";
-    a.click();
-    URL.revokeObjectURL(url);
+    descargarBase64(
+      res.fileBase64,
+      res.fileName ?? "productos.xlsx",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
   };
 
   const upload = async (file: File) => {

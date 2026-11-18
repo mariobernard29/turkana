@@ -47,7 +47,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <KpiCard label="Servicios vendidos" value={String(r.services)} hint={`${r.piercings} perforaciones`} />
         <KpiCard label="Clientes atendidos" value={String(r.clientes.atendidos)} hint={`${r.clientes.nuevos} nuevos`} />
         <KpiCard label="Descuentos otorgados" value={formatMXN(r.sales.discounts)} />
-        <KpiCard label="Rewards generados" value={formatMXN(r.sales.rewardsEarned)} hint={`Canjeados ${formatMXN(r.sales.rewardsRedeemed)}`} />
         <KpiCard label="Créditos por cobrar" value={formatMXN(r.creditOutstanding)} />
         <KpiCard label="Apartados activos" value={String(r.layawaysActive)} hint={`Saldo ${formatMXN(r.layawayPending)}`} />
         <KpiCard label="Variantes agotadas" value={String(r.outOfStock)} />

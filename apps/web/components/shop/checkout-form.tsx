@@ -13,20 +13,18 @@ const TAX_RATE = 0.16;
 
 export type ShippingProps = { freeThresholdCents: number; standardCents: number; expressCents: number };
 
-const REDEEM_CAP_CENTS = 100000; // tope $1,000 por compra
 
 export function CheckoutForm({
   customer,
   shipping: shippingCfg,
 }: {
-  customer: { name: string; email: string; balanceCents: number } | null;
+  customer: { name: string; email: string } | null;
   shipping: ShippingProps;
 }) {
   const FREE_SHIPPING_CENTS = shippingCfg.freeThresholdCents;
   const SHIPPING = { standard: shippingCfg.standardCents, express: shippingCfg.expressCents };
   const [items, setItems] = useState<CartItem[]>([]);
   const [shippingMethod, setShippingMethod] = useState<"standard" | "express">("standard");
-  const [useRewards, setUseRewards] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rates, setRates] = useState<"idle" | "loading" | "ready">("idle");
@@ -60,9 +58,10 @@ export function CheckoutForm({
   const qualifiesFree = goods >= FREE_SHIPPING_CENTS;
   const shipping = qualifiesFree ? 0 : SHIPPING[shippingMethod];
   const ivaIncluded = goods - Math.round(goods / (1 + TAX_RATE));
-  const maxRedeem = customer ? Math.min(customer.balanceCents, REDEEM_CAP_CENTS, goods) : 0;
-  const redeem = useRewards ? maxRedeem : 0;
-  const total = goods + shipping - redeem;
+  // Turkana Rewards es un club de cupones y beneficios, no un monedero: nadie
+  // junta saldo comprando. El checkout ya no ofrece canjear nada, así que no hay
+  // descuento que restar aquí.
+  const total = goods + shipping;
 
   const giftBagQty = items.find((i) => i.variantId === GIFT_BAG.variantId)?.qty ?? 0;
   const addGiftBag = () => {
@@ -91,7 +90,7 @@ export function CheckoutForm({
         lat: form.lat, lng: form.lng,
       },
       shippingMethod,
-      redeemCents: redeem,
+      redeemCents: 0,
     };
     const res = await startCheckout(payload);
     if (!res.ok || !res.url) {
@@ -282,33 +281,9 @@ export function CheckoutForm({
           <p className="mt-1.5 text-xs text-muted">¿Varios regalos? Agrega una bolsa por cada uno (+{formatMXN(GIFT_BAG.priceCents)} c/u).</p>
         </div>
 
-        {/* Turkana Rewards */}
-        {customer ? (
-          maxRedeem > 0 ? (
-            <button
-              type="button"
-              onClick={() => setUseRewards((v) => !v)}
-              className={cn(
-                "mt-4 flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition-colors",
-                useRewards ? "border-gold bg-gold/10" : "border-ink/15",
-              )}
-            >
-              <span className="text-ink">Usar saldo Rewards <span className="text-muted">({formatMXN(customer.balanceCents)} disponible)</span></span>
-              <span className={useRewards ? "text-gold" : "text-muted"}>{useRewards ? `−${formatMXN(maxRedeem)}` : "Aplicar"}</span>
-            </button>
-          ) : (
-            <p className="mt-4 text-xs text-muted">Tienes {formatMXN(customer.balanceCents)} en Rewards (se aplica desde $1 en productos).</p>
-          )
-        ) : (
-          <a href="/rewards/acceso" className="mt-4 block rounded-xl border border-dashed border-gold/40 px-4 py-3 text-center text-sm text-gold hover:bg-gold/5">
-            ¿Tienes Turkana Rewards? Inicia sesión para usar tu saldo
-          </a>
-        )}
-
         <div className="mt-4 space-y-2 border-t border-ink/10 pt-4 text-sm">
           <div className="flex justify-between text-muted"><span>Productos</span><span>{formatMXN(goods)}</span></div>
           <div className="flex justify-between text-muted"><span>Envío</span><span>{shipping === 0 ? "Gratis" : formatMXN(shipping)}</span></div>
-          {redeem > 0 && <div className="flex justify-between text-gold"><span>Rewards</span><span>−{formatMXN(redeem)}</span></div>}
           <div className="flex items-baseline justify-between pt-2 text-base text-ink"><span>Total</span><span className="text-xl font-semibold tabular-nums">{formatMXN(total)}</span></div>
           <p className="text-right text-xs text-muted">IVA incluido: {formatMXN(ivaIncluded)}</p>
         </div>

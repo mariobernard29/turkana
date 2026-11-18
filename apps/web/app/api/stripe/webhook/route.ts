@@ -10,6 +10,30 @@ export const dynamic = "force-dynamic";
 
 type DB = ReturnType<typeof createAdminClient>;
 
+// Con qué pagó la clienta, de verdad.
+//
+// Durante un tiempo esto se sacaba de `pi.payment_method_types.includes("oxxo")`
+// y TODA venta en línea quedaba registrada como pago en OXXO, aunque se hubiera
+// pagado con tarjeta: ese campo es la lista de métodos que se OFRECIERON en el
+// checkout —siempre ["card","oxxo"], porque así se crea la sesión— y no el que
+// se usó. El método real sólo está en el cargo, en payment_method_details.type.
+async function metodoReal(pi: Stripe.PaymentIntent): Promise<"stripe" | "oxxo"> {
+  const chargeId = typeof pi.latest_charge === "string" ? pi.latest_charge : pi.latest_charge?.id;
+  if (chargeId) {
+    try {
+      const ch = await stripe.charges.retrieve(chargeId);
+      const tipo = ch.payment_method_details?.type;
+      if (tipo === "oxxo") return "oxxo";
+      if (tipo) return "stripe"; // tarjeta y cualquier otro método en línea
+    } catch (e) {
+      console.error("[webhook] no se pudo leer el cargo para saber el método:", e);
+    }
+  }
+  // Sin cargo que consultar: sólo se puede afirmar OXXO si fue lo único ofrecido.
+  const tipos = pi.payment_method_types ?? [];
+  return tipos.length === 1 && tipos[0] === "oxxo" ? "oxxo" : "stripe";
+}
+
 // Marca la orden como pagada (idempotente): payment + stock + rewards + aviso.
 async function fulfillOrder(
   db: DB,
@@ -145,7 +169,7 @@ export async function POST(req: Request) {
         const orderId = pi.metadata?.order_id;
         if (orderId) {
           await fulfillOrder(db, orderId, {
-            method: pi.payment_method_types?.includes("oxxo") ? "oxxo" : "stripe",
+            method: await metodoReal(pi),
             amountCents: pi.amount_received ?? pi.amount,
             intentId: pi.id,
             chargeId: (pi.latest_charge as string) ?? undefined,
